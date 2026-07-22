@@ -9,6 +9,8 @@ export default function Login({ onSuccess }) {
   function handleSubmit(e) {
     e.preventDefault();
     console.log("hows life")
+  console.log("code", code)
+
     if (code.trim() === ACCESS_CODE) {
       onSuccess();
     } else {
