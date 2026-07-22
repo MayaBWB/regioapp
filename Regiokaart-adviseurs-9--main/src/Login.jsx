@@ -8,6 +8,7 @@ export default function Login({ onSuccess }) {
 
   function handleSubmit(e) {
     e.preventDefault();
+    console.log("hows life")
     if (code.trim() === ACCESS_CODE) {
       onSuccess();
     } else {
