@@ -1,0 +1,390 @@
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+}
+
+.dept-tabs {
+  display: flex;
+  gap: 2px;
+  background: #e5e5e0;
+  padding: 6px 6px 0;
+  flex-shrink: 0;
+}
+
+.dept-tab {
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 500;
+  border: none;
+  border-radius: 8px 8px 0 0;
+  background: #d8d8d2;
+  color: #555;
+  cursor: pointer;
+}
+
+.dept-tab:hover {
+  background: #cfcfc8;
+}
+
+.dept-tab.active {
+  background: #fafaf8;
+  color: #111;
+}
+
+.app {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  background: #fafaf8;
+  border-right: 1px solid #ddd;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.sidebar h1 {
+  font-size: 16px;
+  font-weight: 500;
+  margin: 0 0 4px;
+}
+
+.hint {
+  font-size: 12px;
+  color: #777;
+  margin: 0 0 12px;
+}
+
+.sync-status {
+  font-size: 11px;
+  margin: 0 0 12px;
+  font-weight: 500;
+}
+
+.sync-status.live {
+  color: #1D9E75;
+}
+
+.sync-status.local {
+  color: #999;
+}
+
+.reset-btn {
+  width: 100%;
+  padding: 5px 8px;
+  font-size: 11px;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+  background: #fafaf8;
+  color: #777;
+  cursor: pointer;
+  margin-bottom: 10px;
+}
+
+.reset-btn:hover {
+  background: #f0f0ec;
+  color: #a32d2d;
+  border-color: #d8b8b8;
+}
+
+.advisor-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.advisor-list button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.advisor-list button:hover {
+  background: #f0f0ec;
+}
+
+.advisor-list button.active {
+  font-weight: 500;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.home-pc {
+  font-size: 11px;
+  color: #999;
+  font-weight: 400;
+}
+
+.map-wrap {
+  flex: 1;
+  position: relative;
+}
+
+.edited-mark {
+  margin-left: auto;
+  font-size: 8px;
+  color: #d85a30;
+}
+
+.editor {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #ddd;
+}
+
+.editor h2 {
+  font-size: 14px;
+  font-weight: 500;
+  margin: 0 0 4px;
+}
+
+.editor textarea {
+  width: 100%;
+  font-size: 12px;
+  font-family: inherit;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  resize: vertical;
+  margin-top: 6px;
+}
+
+.warning {
+  font-size: 11px;
+  color: #a32d2d;
+  margin: 6px 0 0;
+}
+
+.editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.save-btn {
+  padding: 6px 14px;
+  font-size: 13px;
+  border-radius: 6px;
+  border: 1px solid #333;
+  background: #222;
+  color: #fff;
+  cursor: pointer;
+}
+
+.save-btn:hover {
+  background: #444;
+}
+
+.count {
+  font-size: 11px;
+  color: #888;
+}
+
+.zone-label {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  font-size: 10px !important;
+  font-weight: 500;
+  color: #555 !important;
+  pointer-events: none;
+}
+
+.zone-label::before {
+  display: none;
+}
+
+.postcode-label {
+  background: rgba(255, 255, 255, 0.85) !important;
+  border: none !important;
+  box-shadow: none !important;
+  font-size: 10px !important;
+  font-weight: 400;
+  color: #333 !important;
+  padding: 1px 3px !important;
+  pointer-events: none;
+}
+
+.postcode-label::before {
+  display: none;
+}
+
+.search-bar {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 1000;
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid #ddd;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 240px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.search-bar input {
+  padding: 6px 8px;
+  font-size: 13px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+.search-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.search-add {
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+  border: 1px dashed #999;
+  background: #fff;
+  color: #555;
+  cursor: pointer;
+}
+
+.search-add:hover {
+  background: #f5f5f2;
+}
+
+.search-btn {
+  padding: 6px 10px;
+  font-size: 13px;
+  border-radius: 6px;
+  border: 1px solid #333;
+  background: #222;
+  color: #fff;
+  cursor: pointer;
+}
+
+.search-btn:hover {
+  background: #444;
+}
+
+.search-clear {
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  background: #fff;
+  cursor: pointer;
+}
+
+.search-error {
+  font-size: 11px;
+  color: #a32d2d;
+}
+
+.search-results {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid #eee;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.search-result-row {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 12px;
+}
+
+.search-result-pc {
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.search-result-names {
+  color: #333;
+}
+
+.login-screen {
+  height: 100vh;
+  width: 100vw;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fafaf8;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.login-box {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  padding: 28px 24px;
+  width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.login-box h1 {
+  font-size: 16px;
+  font-weight: 500;
+  margin: 0;
+}
+
+.login-box input {
+  padding: 8px 10px;
+  font-size: 14px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+.crash-screen {
+  height: 100vh;
+  width: 100vw;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  padding: 20px;
+  text-align: center;
+}
+
+.crash-screen pre {
+  background: #f4f4f2;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 10px;
+  font-size: 12px;
+  max-width: 500px;
+  overflow-x: auto;
+}
