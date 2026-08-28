@@ -31,7 +31,7 @@ const AIRCO_ADVISORS = new Set([
   "Kevin D.", "Kuen", "Kurt M.", "Kurt Smeets", "Leroy", "Maarten", "Mario", "Michel",
   "Robert", "Roderik", "Roger", "Roland", "Sam DeLaet", "Sam G.", "Stefan",
   "Stefanie", "Steven", "Stieven", "Sven V.", "Timothy", "Tom H.",
-  "Tom Janssens", "Tom Vereecke", "Tom van Diest", "Vincent", "Wilfried", "Wim", "Yoeri",
+  "Tom Janssens", "Tom Vereecke", "Tom van Diest", "Vincent", "Wilfried", "Wim", "Yoeri", "Joyce De Smet",
 ]);
 
 const ZP_ADVISORS = new Set([
@@ -39,7 +39,7 @@ const ZP_ADVISORS = new Set([
   "Kevin D.", "Kuen", "Kurt M.", "Kurt Smeets", "Leroy", "Maarten", "Mario", "Michel",
   "Robert", "Roderik", "Roger", "Sam DeLaet", "Sam G.", "Stefan", "Stefanie",
   "Steven", "Stieven", "Sven V.", "Timothy", "Tom H.", "Tom Janssens",
-  "Tom Vereecke", "Tom van Diest", "Vincent", "Wim", "Yoeri",
+  "Tom Vereecke", "Tom van Diest", "Vincent", "Wim", "Yoeri", "Joyce De Smet",
 ]);
 
 const WPB_ADVISORS = new Set([
@@ -48,7 +48,7 @@ const WPB_ADVISORS = new Set([
   "Tom H.", "Vincent", "Wim", "Yoeri",
 ]);
 
-const WPLW_ADVISORS = new Set(["Bjorn", "Wim"]);
+const WPLW_ADVISORS = new Set(["Bjorn", "Wim", "Glenn"]);
 
 // elk departement is volledig apart: eigen kaartdata, eigen adviseurs, eigen
 // opslag-sleutel. Ze delen geen data en botsen dus nooit met elkaar.
