@@ -24,11 +24,11 @@ const COLORS = [
 const SEARCH_COLORS = ["#EF9F27", "#3B8BD4", "#639922", "#D4537E", "#8B5CF6", "#0c447c"];
 const MAX_SEARCH_FIELDS = SEARCH_COLORS.length;
 
-const PRIO_ADVISORS = new Set(["Jimmy", "Kris", "Kurt M.", "Maarten", "Mario", "Stieven", "Sven V.", "Vincent", "Yoeri"]);
+const PRIO_ADVISORS = new Set(["Jimmy", "Kris", "Kurt Moonen", "Maarten", "Mario", "Stieven", "Sven V.", "Vincent", "Yoeri"]);
 
 const AIRCO_ADVISORS = new Set([
   "Amanda", "Gilles", "Glenn", "Inge", "Jimmy", "Johan S.", "Jonas D.", "Jonas Loos",
-  "Kevin D.", "Kuen", "Kurt M.", "Kurt Smeets", "Leroy", "Maarten", "Mario", "Michel",
+  "Kevin D.", "Kuen", "Kurt Moonen", "Kurt Smeets", "Leroy", "Maarten", "Mario", "Michel",
   "Robert", "Roderik", "Roger", "Roland", "Sam DeLaet", "Sam G.", "Stefan",
   "Stefanie", "Steven", "Stieven", "Sven V.", "Timothy", "Tom H.",
   "Tom Janssens", "Tom Vereecke", "Tom van Diest", "Vincent", "Wilfried", "Wim", "Yoeri", "Joyce De Smet",
@@ -36,14 +36,14 @@ const AIRCO_ADVISORS = new Set([
 
 const ZP_ADVISORS = new Set([
   "Amanda", "Gilles", "Glenn", "Inge", "Jimmy", "Johan S.", "Jonas D.", "Jonas Loos",
-  "Kevin D.", "Kuen", "Kurt M.", "Kurt Smeets", "Leroy", "Maarten", "Mario", "Michel",
+  "Kevin D.", "Kuen", "Kurt Moonen", "Kurt Smeets", "Leroy", "Maarten", "Mario", "Michel",
   "Robert", "Roderik", "Roger", "Sam DeLaet", "Sam G.", "Stefan", "Stefanie",
   "Steven", "Stieven", "Sven V.", "Timothy", "Tom H.", "Tom Janssens",
   "Tom Vereecke", "Tom van Diest", "Vincent", "Wim", "Yoeri", "Joyce De Smet",
 ]);
 
 const WPB_ADVISORS = new Set([
-  "Glenn", "Inge", "Johan S.", "Jonas Loos", "Kuen", "Kurt M.", "Leroy",
+  "Glenn", "Inge", "Johan S.", "Jonas Loos", "Kuen", "Kurt Moonen", "Leroy",
   "Maarten", "Robert", "Roger", "Stefan", "Steven", "Stieven", "Sven V.",
   "Tom H.", "Vincent", "Wim", "Yoeri",
 ]);
