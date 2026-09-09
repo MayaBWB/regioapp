@@ -531,7 +531,14 @@ function DeptMap({ config }) {
             if (!c) return null;
             return (
               <CircleMarker key={"note-" + n.postcode} center={c} radius={1} pathOptions={{ opacity: 0, fillOpacity: 0 }}>
-                <Tooltip permanent direction="top" className="sticky-note">{n.text}</Tooltip>
+                <Tooltip permanent direction="top" className="sticky-note-wrap">
+                  <div
+                    className="sticky-note"
+                    style={{ transform: `scale(${Math.min(1.2, Math.max(0.55, (zoom - 6) / 5))})` }}
+                  >
+                    {n.text}
+                  </div>
+                </Tooltip>
               </CircleMarker>
             );
           })}
