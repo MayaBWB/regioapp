@@ -9,10 +9,12 @@ import { firebaseEnabled, subscribeToOverrides, saveOverridesShared } from "./fi
 import advisorPostcodesBase from "./data/advisor-postcodes.json";
 import advisorsHome from "./data/advisors-home.json";
 import postcodeNames from "./data/postcode-names.json";
+import notesData from "./data/notes.json";
 
 import advisorPostcodesAlkmaar from "./data/advisor-postcodes-alkmaar.json";
 import advisorsHomeAlkmaar from "./data/advisors-home-alkmaar.json";
 import postcodeNamesAlkmaar from "./data/postcode-names-alkmaar.json";
+import notesDataAlkmaar from "./data/notes-alkmaar.json";
 
 const AUTH_KEY = "map-auth-ok";
 
@@ -60,6 +62,7 @@ const DEPARTMENTS = [
     advisorPostcodesBase,
     advisorsHome,
     postcodeNames,
+    notes: notesData,
     storageKey: "advisor-postcode-overrides",
     firebasePath: "advisorPostcodeOverrides",
     center: [50.95, 4.6],
@@ -79,6 +82,7 @@ const DEPARTMENTS = [
     advisorPostcodesBase: advisorPostcodesAlkmaar,
     advisorsHome: advisorsHomeAlkmaar,
     postcodeNames: postcodeNamesAlkmaar,
+    notes: notesDataAlkmaar,
     storageKey: "advisor-postcode-overrides-alkmaar",
     firebasePath: "advisorPostcodeOverridesAlkmaar",
     center: [52.6, 5.0],
@@ -148,7 +152,7 @@ export default function App() {
 function DeptMap({ config }) {
   const {
     postcodesUrl, advisorPostcodesBase, advisorsHome, postcodeNames,
-    storageKey, firebasePath, center, zoom: initialZoom, icons,
+    storageKey, firebasePath, center, zoom: initialZoom, icons, notes,
   } = config;
 
   const [postcodesGeo, setPostcodesGeo] = useState(null);
@@ -236,6 +240,11 @@ function DeptMap({ config }) {
   const postcodeLabels = useMemo(() => {
     return Object.entries(postcodeToCentroid).map(([pc, c]) => ({ pc, lat: c[0], lng: c[1] }));
   }, [postcodeToCentroid]);
+
+  const activeNotes = useMemo(() => {
+    const today = new Date();
+    return (notes || []).filter((n) => new Date(n.expires) >= today);
+  }, [notes]);
 
   const showPostcodeLabels = zoom >= 10;
 
@@ -516,6 +525,16 @@ function DeptMap({ config }) {
                 <Tooltip permanent direction="center" className="postcode-label">{pc}</Tooltip>
               </CircleMarker>
             ))}
+
+          {activeNotes.map((n) => {
+            const c = postcodeToCentroid[n.postcode];
+            if (!c) return null;
+            return (
+              <CircleMarker key={"note-" + n.postcode} center={c} radius={1} pathOptions={{ opacity: 0, fillOpacity: 0 }}>
+                <Tooltip permanent direction="top" className="sticky-note">{n.text}</Tooltip>
+              </CircleMarker>
+            );
+          })}
 
           <Pane name="homes" style={{ zIndex: 700 }}>
             {Object.entries(homeCoords).map(([name, latlng]) => (
