@@ -421,7 +421,7 @@ function DeptMap({ config }) {
                   onClick={() => selectAdvisor(name)}
                 >
                   <span className="dot" style={{ background: colorForIndex(i) }} />
-                  <span style={isPrio ? { fontWeight: 700 } : {}}>{name}</span>
+                  <span style={isPrio ? { fontWeight: 700, background: "#FFD70055", padding: "1px 5px", borderRadius: "4px" } : {}}>{name}</span>
                   {advisorsHome[name]?.postcode && (
                     <span className="home-pc">{advisorsHome[name].postcode}</span>
                   )}
