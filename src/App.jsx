@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState, useRef } from "react";
 import { MapContainer, TileLayer, GeoJSON, CircleMarker, Marker, Tooltip, ZoomControl, Pane, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -177,6 +177,7 @@ function DeptMap({ config, isAdmin }) {
   const homeRenderer = useMemo(() => L.svg({ pane: "homes" }), []);
   const advisorLayerRef = useRef(null);
   const searchLayerRef = useRef(null);
+  const panelRef = useRef(null);
 
   useEffect(() => {
     if (firebaseEnabled) {
@@ -205,17 +206,6 @@ function DeptMap({ config, isAdmin }) {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [panelAdvisor]);
-
-  useEffect(() => {
-    if (!panelAdvisor) return;
-    const onResize = () => {
-      setPanelLeft((l) => clampPanelLeft(l));
-      setPanelTop((t) => clampPanelTop(t));
-    };
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [panelAdvisor, tagDefs]);
 
   const advisorPostcodes = useMemo(() => {
     return { ...advisorPostcodesBase, ...overrides };
@@ -338,17 +328,18 @@ function DeptMap({ config, isAdmin }) {
     setSaved(false);
   }
 
-  function clampPanelLeft(left) {
+  function clampPanelLeft(left, width) {
     const margin = 12;
-    const panelWidth = Math.min(280, window.innerWidth - margin * 2);
+    const panelWidth = Math.min(width ?? 280, window.innerWidth - margin * 2);
     const maxLeft = Math.max(margin, window.innerWidth - panelWidth - margin);
     return Math.min(Math.max(margin, left), maxLeft);
   }
 
-  function clampPanelTop(top) {
+  function clampPanelTop(top, height) {
     const margin = 12;
-    const estHeight = Math.min(120 + (tagDefs?.length || 0) * 30 + 140, window.innerHeight - margin * 2);
-    const maxTop = Math.max(margin, window.innerHeight - estHeight - margin);
+    // rough guess for the very first frame, before the panel is measured
+    const estHeight = height ?? (150 + (tagDefs?.length || 0) * 30 + 140);
+    const maxTop = Math.max(margin, window.innerHeight - Math.min(estHeight, window.innerHeight - margin * 2) - margin);
     return Math.min(Math.max(margin, top), maxTop);
   }
 
@@ -425,6 +416,28 @@ function DeptMap({ config, isAdmin }) {
     .split(",")
     .map((s) => s.trim())
     .filter((s) => s && (!/^\d{4}$/.test(s) || !availablePostcodes.has(s)));
+
+  function reclampPanelToContent() {
+    if (!panelRef.current) return;
+    const rect = panelRef.current.getBoundingClientRect();
+    setPanelTop((t) => clampPanelTop(t, rect.height));
+    setPanelLeft((l) => clampPanelLeft(l, rect.width));
+  }
+
+  // measure the panel's real rendered size and re-clamp -- a hardcoded
+  // height estimate drifts out of sync whenever the panel's content changes
+  useLayoutEffect(() => {
+    if (!panelAdvisor) return;
+    reclampPanelToContent();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panelAdvisor, panelPcDraft, panelUnknown.length]);
+
+  useEffect(() => {
+    if (!panelAdvisor) return;
+    window.addEventListener("resize", reclampPanelToContent);
+    return () => window.removeEventListener("resize", reclampPanelToContent);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panelAdvisor]);
 
   function handleSave() {
     if (!isAdmin) return;
@@ -727,7 +740,7 @@ function DeptMap({ config, isAdmin }) {
       {isAdmin && panelAdvisor && (
         <>
           <div className="advisor-panel-backdrop" onClick={closePanel} />
-          <div className="advisor-panel" style={{ top: panelTop, left: panelLeft }}>
+          <div className="advisor-panel" ref={panelRef} style={{ top: panelTop, left: panelLeft }}>
             <div className="advisor-panel-header">
               <h2>{panelAdvisor}</h2>
               <button className="advisor-panel-close" onClick={closePanel} aria-label="Sluiten">×</button>
