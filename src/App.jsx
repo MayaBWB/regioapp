@@ -46,7 +46,9 @@ const DEPARTMENTS = [
     advisorPostcodesBase,
     advisorsHome,
     postcodeNames,
-    notes: notesData,
+    notesSeed: notesData,
+    notesStorageKey: "advisor-notes",
+    notesFirebasePath: "advisorNotes",
     storageKey: "advisor-postcode-overrides",
     firebasePath: "advisorPostcodeOverrides",
     center: [50.95, 4.6],
@@ -65,7 +67,9 @@ const DEPARTMENTS = [
     advisorPostcodesBase: advisorPostcodesAlkmaar,
     advisorsHome: advisorsHomeAlkmaar,
     postcodeNames: postcodeNamesAlkmaar,
-    notes: notesDataAlkmaar,
+    notesSeed: notesDataAlkmaar,
+    notesStorageKey: "advisor-notes-alkmaar",
+    notesFirebasePath: "advisorNotesAlkmaar",
     storageKey: "advisor-postcode-overrides-alkmaar",
     firebasePath: "advisorPostcodeOverridesAlkmaar",
     center: [52.6, 5.0],
@@ -94,6 +98,36 @@ function loadOverrides(key) {
 
 function saveOverridesLocal(key, overrides) {
   localStorage.setItem(key, JSON.stringify(overrides));
+}
+
+// bundled notes.json entries only have a free-text "text" field (e.g. "Maarten 16/09");
+// this pulls out just the name so it isn't duplicated once we render "name + date" ourselves
+function migrateSeedNotes(seed) {
+  return (seed || []).map((n, i) => ({
+    id: `seed-${i}-${n.postcode}`,
+    postcode: n.postcode,
+    name: (n.text || "").replace(/\s+\d{1,2}\/\d{1,2}.*$/, "").trim() || n.text || "Notitie",
+    expires: n.expires,
+  }));
+}
+
+function shortDate(iso) {
+  const d = new Date(iso);
+  return `${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+// same name + same postcode -> one sticky-note line with dates joined by "en"
+// (e.g. "Roderik 06/10 en 07/10"), instead of a separate line per note
+function groupNotesByName(list) {
+  const map = new Map();
+  list.forEach((n) => {
+    if (!map.has(n.name)) map.set(n.name, new Set());
+    map.get(n.name).add(n.expires);
+  });
+  return Array.from(map.entries()).map(([name, dates]) => ({
+    name,
+    dates: Array.from(dates).sort(),
+  }));
 }
 
 function centroidOfRing(ring) {
@@ -151,7 +185,8 @@ export default function App() {
 function DeptMap({ config, isAdmin }) {
   const {
     postcodesUrl, advisorPostcodesBase, advisorsHome, postcodeNames,
-    storageKey, firebasePath, center, zoom: initialZoom, notes,
+    storageKey, firebasePath, center, zoom: initialZoom,
+    notesSeed, notesStorageKey, notesFirebasePath,
     tagDefs, advisorTagsBase, tagsStorageKey, tagsFirebasePath,
     deletedStorageKey, deletedFirebasePath,
   } = config;
@@ -161,6 +196,15 @@ function DeptMap({ config, isAdmin }) {
   const [overrides, setOverrides] = useState(() => loadOverrides(storageKey));
   const [tagOverrides, setTagOverrides] = useState(() => loadOverrides(tagsStorageKey));
   const [deletedAdvisors, setDeletedAdvisors] = useState(() => loadOverrides(deletedStorageKey));
+  const [notesList, setNotesList] = useState(() => {
+    try {
+      const raw = localStorage.getItem(notesStorageKey);
+      if (raw) return JSON.parse(raw);
+    } catch {
+      // ignore malformed local data, fall back to seed below
+    }
+    return migrateSeedNotes(notesSeed);
+  });
   const [draft, setDraft] = useState("");
   const [saved, setSaved] = useState(false);
   const [zoom, setZoom] = useState(initialZoom);
@@ -173,11 +217,17 @@ function DeptMap({ config, isAdmin }) {
   const [panelPcDraft, setPanelPcDraft] = useState("");
   const [panelTags, setPanelTags] = useState([]);
   const [panelSaved, setPanelSaved] = useState(false);
+  const [notesPanelOpen, setNotesPanelOpen] = useState(false);
+  const [noteDraftPostcode, setNoteDraftPostcode] = useState("");
+  const [noteDraftName, setNoteDraftName] = useState("");
+  const [noteDraftDate, setNoteDraftDate] = useState("");
+  const [noteError, setNoteError] = useState("");
   const mapRef = useRef(null);
   const homeRenderer = useMemo(() => L.svg({ pane: "homes" }), []);
   const advisorLayerRef = useRef(null);
   const searchLayerRef = useRef(null);
   const panelRef = useRef(null);
+  const notesSeededRef = useRef(false);
 
   useEffect(() => {
     if (firebaseEnabled) {
@@ -199,6 +249,27 @@ function DeptMap({ config, isAdmin }) {
       return unsubscribe;
     }
   }, [deletedFirebasePath]);
+
+  useEffect(() => {
+    if (!firebaseEnabled) return;
+    const unsubscribe = subscribeToOverrides(notesFirebasePath, (shared) => {
+      const arr = Array.isArray(shared) ? shared : shared && typeof shared === "object" ? Object.values(shared) : null;
+      if (arr && arr.length > 0) {
+        notesSeededRef.current = true;
+        setNotesList(arr);
+      } else if (!notesSeededRef.current) {
+        // nothing shared yet -- seed Firebase once from the bundled notes.json
+        notesSeededRef.current = true;
+        const migrated = migrateSeedNotes(notesSeed);
+        setNotesList(migrated);
+        saveOverridesShared(notesFirebasePath, migrated);
+      } else {
+        setNotesList([]);
+      }
+    });
+    return unsubscribe;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notesFirebasePath]);
 
   useEffect(() => {
     if (!panelAdvisor) return;
@@ -279,8 +350,17 @@ function DeptMap({ config, isAdmin }) {
 
   const activeNotes = useMemo(() => {
     const today = new Date();
-    return (notes || []).filter((n) => new Date(n.expires) >= today);
-  }, [notes]);
+    return (notesList || []).filter((n) => new Date(n.expires) >= today);
+  }, [notesList]);
+
+  const notesByPostcode = useMemo(() => {
+    const groups = {};
+    activeNotes.forEach((n) => {
+      if (!groups[n.postcode]) groups[n.postcode] = [];
+      groups[n.postcode].push(n);
+    });
+    return groups;
+  }, [activeNotes]);
 
   const showPostcodeLabels = zoom >= 10;
 
@@ -410,6 +490,54 @@ function DeptMap({ config, isAdmin }) {
       setDraft("");
     }
     setPanelAdvisor(null);
+  }
+
+  function pruneExpiredNotes(list) {
+    const today = new Date();
+    return (list || []).filter((n) => new Date(n.expires) >= today);
+  }
+
+  function persistNotes(nextList) {
+    setNotesList(nextList);
+    if (firebaseEnabled) {
+      saveOverridesShared(notesFirebasePath, nextList);
+    } else {
+      saveOverridesLocal(notesStorageKey, nextList);
+    }
+  }
+
+  function addNote() {
+    if (!isAdmin) return;
+    const pc = noteDraftPostcode.trim();
+    const name = noteDraftName.trim();
+    if (!/^\d{4}$/.test(pc) || !availablePostcodes.has(pc)) {
+      setNoteError("Onbekende postcode");
+      return;
+    }
+    if (!name) {
+      setNoteError("Naam is verplicht");
+      return;
+    }
+    if (!noteDraftDate) {
+      setNoteError("Datum is verplicht");
+      return;
+    }
+    setNoteError("");
+    const newNote = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      postcode: pc,
+      name,
+      expires: noteDraftDate,
+    };
+    persistNotes(pruneExpiredNotes([...notesList, newNote]));
+    setNoteDraftPostcode("");
+    setNoteDraftName("");
+    setNoteDraftDate("");
+  }
+
+  function deleteNote(id) {
+    if (!isAdmin) return;
+    persistNotes(notesList.filter((n) => n.id !== id));
   }
 
   const panelUnknown = panelPcDraft
@@ -557,6 +685,11 @@ function DeptMap({ config, isAdmin }) {
         </p>
         <p className="hint role-badge">{isAdmin ? "Beheerder · kan bewerken" : "Bekijker · geen bewerkrechten"}</p>
         {isAdmin && (
+          <button className="reset-btn" onClick={() => setNotesPanelOpen(true)} title="Notities op de kaart toevoegen of verwijderen">
+            🗒️ Notities beheren
+          </button>
+        )}
+        {isAdmin && (
           <button className="reset-btn" onClick={handleReset} title="Wist eventuele lokale aanpassingen en gaat terug naar de standaardgegevens">
             ↺ Herstel naar standaardgegevens
           </button>
@@ -690,17 +823,19 @@ function DeptMap({ config, isAdmin }) {
               </CircleMarker>
             ))}
 
-          {activeNotes.map((n) => {
-            const c = postcodeToCentroid[n.postcode];
+          {Object.entries(notesByPostcode).map(([pc, list]) => {
+            const c = postcodeToCentroid[pc];
             if (!c) return null;
             return (
-              <CircleMarker key={"note-" + n.postcode} center={c} radius={1} pathOptions={{ opacity: 0, fillOpacity: 0 }}>
+              <CircleMarker key={"note-" + pc} center={c} radius={1} pathOptions={{ opacity: 0, fillOpacity: 0 }}>
                 <Tooltip permanent direction="top" className="sticky-note-wrap">
                   <div
                     className="sticky-note"
                     style={{ transform: `scale(${Math.min(1.2, Math.max(0.55, (zoom - 6) / 5))})` }}
                   >
-                    {n.text}
+                    {groupNotesByName(list).map((g) => (
+                      <div key={g.name}>{g.name} {g.dates.map(shortDate).join(" en ")}</div>
+                    ))}
                   </div>
                 </Tooltip>
               </CircleMarker>
@@ -773,6 +908,53 @@ function DeptMap({ config, isAdmin }) {
             </div>
             <div className="advisor-panel-danger">
               <button className="delete-btn" onClick={deleteAdvisor}>Verwijder</button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {isAdmin && notesPanelOpen && (
+        <>
+          <div className="advisor-panel-backdrop" onClick={() => setNotesPanelOpen(false)} />
+          <div className="advisor-panel notes-panel">
+            <div className="advisor-panel-header">
+              <h2>Notities</h2>
+              <button className="advisor-panel-close" onClick={() => setNotesPanelOpen(false)} aria-label="Sluiten">×</button>
+            </div>
+
+            <div className="notes-form">
+              <input
+                type="text"
+                placeholder="Postcode"
+                value={noteDraftPostcode}
+                onChange={(e) => setNoteDraftPostcode(e.target.value)}
+              />
+              <input
+                type="text"
+                placeholder="Naam"
+                value={noteDraftName}
+                onChange={(e) => setNoteDraftName(e.target.value)}
+              />
+              <input
+                type="date"
+                value={noteDraftDate}
+                onChange={(e) => setNoteDraftDate(e.target.value)}
+              />
+              {noteError && <p className="warning">{noteError}</p>}
+              <button className="save-btn" onClick={addNote}>+ Toevoegen</button>
+            </div>
+
+            <div className="notes-list">
+              {activeNotes.length === 0 && <p className="hint">Geen actieve notities</p>}
+              {activeNotes
+                .slice()
+                .sort((a, b) => a.expires.localeCompare(b.expires))
+                .map((n) => (
+                  <div key={n.id} className="notes-list-row">
+                    <span>{n.postcode} · {n.name} · {shortDate(n.expires)}</span>
+                    <button className="notes-list-delete" onClick={() => deleteNote(n.id)} aria-label="Verwijder">×</button>
+                  </div>
+                ))}
             </div>
           </div>
         </>
