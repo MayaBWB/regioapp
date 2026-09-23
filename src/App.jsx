@@ -55,6 +55,8 @@ const DEPARTMENTS = [
     advisorTagsBase,
     tagsStorageKey: "advisor-tag-overrides",
     tagsFirebasePath: "advisorTagOverrides",
+    deletedStorageKey: "advisor-deleted-overrides",
+    deletedFirebasePath: "advisorDeletedOverrides",
   },
   {
     id: "alkmaar",
@@ -72,6 +74,8 @@ const DEPARTMENTS = [
     advisorTagsBase: {},
     tagsStorageKey: "advisor-tag-overrides-alkmaar",
     tagsFirebasePath: "advisorTagOverridesAlkmaar",
+    deletedStorageKey: "advisor-deleted-overrides-alkmaar",
+    deletedFirebasePath: "advisorDeletedOverridesAlkmaar",
   },
 ];
 
@@ -149,12 +153,14 @@ function DeptMap({ config, isAdmin }) {
     postcodesUrl, advisorPostcodesBase, advisorsHome, postcodeNames,
     storageKey, firebasePath, center, zoom: initialZoom, notes,
     tagDefs, advisorTagsBase, tagsStorageKey, tagsFirebasePath,
+    deletedStorageKey, deletedFirebasePath,
   } = config;
 
   const [postcodesGeo, setPostcodesGeo] = useState(null);
   const [selected, setSelected] = useState(null);
   const [overrides, setOverrides] = useState(() => loadOverrides(storageKey));
   const [tagOverrides, setTagOverrides] = useState(() => loadOverrides(tagsStorageKey));
+  const [deletedAdvisors, setDeletedAdvisors] = useState(() => loadOverrides(deletedStorageKey));
   const [draft, setDraft] = useState("");
   const [saved, setSaved] = useState(false);
   const [zoom, setZoom] = useState(initialZoom);
@@ -163,6 +169,7 @@ function DeptMap({ config, isAdmin }) {
   const [searchError, setSearchError] = useState("");
   const [panelAdvisor, setPanelAdvisor] = useState(null);
   const [panelTop, setPanelTop] = useState(80);
+  const [panelLeft, setPanelLeft] = useState(276);
   const [panelPcDraft, setPanelPcDraft] = useState("");
   const [panelTags, setPanelTags] = useState([]);
   const [panelSaved, setPanelSaved] = useState(false);
@@ -186,11 +193,29 @@ function DeptMap({ config, isAdmin }) {
   }, [tagsFirebasePath]);
 
   useEffect(() => {
+    if (firebaseEnabled) {
+      const unsubscribe = subscribeToOverrides(deletedFirebasePath, (shared) => setDeletedAdvisors(shared));
+      return unsubscribe;
+    }
+  }, [deletedFirebasePath]);
+
+  useEffect(() => {
     if (!panelAdvisor) return;
     const onKeyDown = (e) => { if (e.key === "Escape") setPanelAdvisor(null); };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [panelAdvisor]);
+
+  useEffect(() => {
+    if (!panelAdvisor) return;
+    const onResize = () => {
+      setPanelLeft((l) => clampPanelLeft(l));
+      setPanelTop((t) => clampPanelTop(t));
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panelAdvisor, tagDefs]);
 
   const advisorPostcodes = useMemo(() => {
     return { ...advisorPostcodesBase, ...overrides };
@@ -201,8 +226,8 @@ function DeptMap({ config, isAdmin }) {
   }, [advisorTagsBase, tagOverrides]);
 
   const advisorNames = useMemo(
-    () => Object.keys(advisorPostcodes).sort((a, b) => a.localeCompare(b)),
-    [advisorPostcodes]
+    () => Object.keys(advisorPostcodes).filter((n) => !deletedAdvisors[n]).sort((a, b) => a.localeCompare(b)),
+    [advisorPostcodes, deletedAdvisors]
   );
 
   useEffect(() => {
@@ -238,10 +263,11 @@ function DeptMap({ config, isAdmin }) {
   const homeCoords = useMemo(() => {
     const coords = {};
     Object.entries(advisorsHome).forEach(([name, info]) => {
+      if (deletedAdvisors[name]) return;
       if (postcodeToCentroid[info.postcode]) coords[name] = postcodeToCentroid[info.postcode];
     });
     return coords;
-  }, [postcodeToCentroid, advisorsHome]);
+  }, [postcodeToCentroid, advisorsHome, deletedAdvisors]);
 
   const zoneLabels = useMemo(() => {
     const groups = {};
@@ -312,11 +338,25 @@ function DeptMap({ config, isAdmin }) {
     setSaved(false);
   }
 
+  function clampPanelLeft(left) {
+    const margin = 12;
+    const panelWidth = Math.min(280, window.innerWidth - margin * 2);
+    const maxLeft = Math.max(margin, window.innerWidth - panelWidth - margin);
+    return Math.min(Math.max(margin, left), maxLeft);
+  }
+
+  function clampPanelTop(top) {
+    const margin = 12;
+    const estHeight = Math.min(120 + (tagDefs?.length || 0) * 30 + 140, window.innerHeight - margin * 2);
+    const maxTop = Math.max(margin, window.innerHeight - estHeight - margin);
+    return Math.min(Math.max(margin, top), maxTop);
+  }
+
   function openPanel(name, e) {
     if (!isAdmin) return;
     const clickY = e?.clientY ?? 100;
-    const estHeight = 120 + (tagDefs?.length || 0) * 30 + 140;
-    setPanelTop(Math.max(12, Math.min(clickY - 40, window.innerHeight - estHeight - 12)));
+    setPanelLeft(clampPanelLeft(276));
+    setPanelTop(clampPanelTop(clickY - 40));
     setPanelAdvisor(name);
     setPanelPcDraft((advisorPostcodes[name] || []).join(", "));
     setPanelTags(advisorTags[name] || []);
@@ -361,6 +401,26 @@ function DeptMap({ config, isAdmin }) {
     setTimeout(() => setPanelSaved(false), 1500);
   }
 
+  function deleteAdvisor() {
+    if (!isAdmin || !panelAdvisor) return;
+    const ok = window.confirm(`Weet je zeker dat je "${panelAdvisor}" wilt verwijderen?`);
+    if (!ok) return;
+
+    const nextDeleted = { ...deletedAdvisors, [panelAdvisor]: true };
+    setDeletedAdvisors(nextDeleted);
+    if (firebaseEnabled) {
+      saveOverridesShared(deletedFirebasePath, nextDeleted);
+    } else {
+      saveOverridesLocal(deletedStorageKey, nextDeleted);
+    }
+
+    if (selected === panelAdvisor) {
+      setSelected(null);
+      setDraft("");
+    }
+    setPanelAdvisor(null);
+  }
+
   const panelUnknown = panelPcDraft
     .split(",")
     .map((s) => s.trim())
@@ -392,11 +452,14 @@ function DeptMap({ config, isAdmin }) {
     if (!ok) return;
     localStorage.removeItem(storageKey);
     localStorage.removeItem(tagsStorageKey);
+    localStorage.removeItem(deletedStorageKey);
     setOverrides({});
     setTagOverrides({});
+    setDeletedAdvisors({});
     if (firebaseEnabled) {
       saveOverridesShared(firebasePath, {});
       saveOverridesShared(tagsFirebasePath, {});
+      saveOverridesShared(deletedFirebasePath, {});
     }
     setSelected(null);
     setDraft("");
@@ -664,7 +727,7 @@ function DeptMap({ config, isAdmin }) {
       {isAdmin && panelAdvisor && (
         <>
           <div className="advisor-panel-backdrop" onClick={closePanel} />
-          <div className="advisor-panel" style={{ top: panelTop }}>
+          <div className="advisor-panel" style={{ top: panelTop, left: panelLeft }}>
             <div className="advisor-panel-header">
               <h2>{panelAdvisor}</h2>
               <button className="advisor-panel-close" onClick={closePanel} aria-label="Sluiten">×</button>
@@ -694,6 +757,9 @@ function DeptMap({ config, isAdmin }) {
                 {panelSaved ? "Opgeslagen ✓" : "Opslaan"}
               </button>
               <button className="panel-close-btn" onClick={closePanel}>Sluiten</button>
+            </div>
+            <div className="advisor-panel-danger">
+              <button className="delete-btn" onClick={deleteAdvisor}>Verwijder</button>
             </div>
           </div>
         </>
