@@ -5,6 +5,8 @@ import "leaflet/dist/leaflet.css";
 import "./App.css";
 import Login from "./Login.jsx";
 import { firebaseEnabled, subscribeToOverrides, saveOverridesShared } from "./firebase.js";
+import avatarMale from "./assets/avatar-male.png";
+import avatarFemale from "./assets/avatar-female.png";
 
 import advisorPostcodesBase from "./data/advisor-postcodes.json";
 import advisorsHome from "./data/advisors-home.json";
@@ -46,9 +48,15 @@ const PRODUCT_DEFS = [
 
 const LANGUAGE_DEFS = ["FR", "NL", "ENG"];
 
-const GENDER_ICONS = { m: "🧔", v: "👩", "": "🧑" };
+const GENDER_AVATARS = { m: avatarMale, v: avatarFemale };
 
 const ONLINE_OFFERTE_LABELS = { ja: "👍 Ja!", nee: "👎 Nee!", eigen_klant: "Enkel eigen klant" };
+
+function ProfileAvatar({ gender }) {
+  const src = GENDER_AVATARS[gender];
+  if (!src) return <span>👤</span>;
+  return <img src={src} alt="" className="profile-photo-img" />;
+}
 
 function emptyProfile() {
   return {
@@ -872,7 +880,9 @@ function DeptMap({ config, isAdmin }) {
           {advisorNames.map((name, i) => {
             const searchHit = advisorSearchHighlight[name];
             const nameTags = advisorTags[name] || [];
-            const isPrio = tagDefs.some((td) => td.bold && nameTags.includes(td.id));
+            const prioTag = tagDefs.find((td) => td.bold && nameTags.includes(td.id));
+            const isPrio = Boolean(prioTag);
+            const activeTags = tagDefs.filter((td) => !td.bold && nameTags.includes(td.id));
             return (
               <li key={name} className="advisor-row">
                 <button
@@ -888,13 +898,20 @@ function DeptMap({ config, isAdmin }) {
                   onDoubleClick={isAdmin ? (e) => openPanel(name, e) : undefined}
                   title={isAdmin ? "Dubbelklik om te bewerken" : undefined}
                 >
-                  <span className="dot" style={{ background: colorForIndex(i) }} />
-                  <span style={isPrio ? { fontWeight: 700, background: "#FFD70055", padding: "1px 5px", borderRadius: "4px" } : {}}>{name}</span>
-                  {advisorsHome[name]?.postcode && (
-                    <span className="home-pc">{advisorsHome[name].postcode}</span>
+                  <span className="advisor-row-top">
+                    <span className="dot" style={{ background: colorForIndex(i) }} />
+                    <span style={isPrio ? { fontWeight: 700, background: "#FFD70055", padding: "1px 5px", borderRadius: "4px" } : {}}>{name}</span>
+                    {prioTag && <span title={prioTag.label}>{prioTag.emoji}</span>}
+                    {advisorsHome[name]?.postcode && (
+                      <span className="home-pc">{advisorsHome[name].postcode}</span>
+                    )}
+                    {(overrides[name] || tagOverrides[name]) && <span className="edited-mark" title="Aangepast">●</span>}
+                  </span>
+                  {activeTags.length > 0 && (
+                    <span className="advisor-row-icons">
+                      {activeTags.map((td) => <span key={td.id} title={td.label}>{td.emoji}</span>)}
+                    </span>
                   )}
-                  {tagDefs.map((td) => nameTags.includes(td.id) && <span key={td.id} title={td.label}>{td.emoji}</span>)}
-                  {(overrides[name] || tagOverrides[name]) && <span className="edited-mark" title="Aangepast">●</span>}
                 </button>
                 <button
                   className="profile-btn"
@@ -1164,12 +1181,12 @@ function DeptMap({ config, isAdmin }) {
 
               {isAdmin && profileDraft ? (
                 <>
-                  <div className="profile-photo">{GENDER_ICONS[profileDraft.gender] || GENDER_ICONS[""]}</div>
+                  <div className="profile-photo"><ProfileAvatar gender={profileDraft.gender} /></div>
                   <div className="profile-section">
                     <p className="hint">Profielfoto</p>
                     <div className="profile-radio-row">
-                      <label><input type="radio" name="gender" checked={profileDraft.gender === "m"} onChange={() => updateProfileField("gender", "m")} /> Mannetje</label>
-                      <label><input type="radio" name="gender" checked={profileDraft.gender === "v"} onChange={() => updateProfileField("gender", "v")} /> Vrouwtje</label>
+                      <label><input type="radio" name="gender" checked={profileDraft.gender === "m"} onChange={() => updateProfileField("gender", "m")} /> Man</label>
+                      <label><input type="radio" name="gender" checked={profileDraft.gender === "v"} onChange={() => updateProfileField("gender", "v")} /> Vrouw</label>
                     </div>
                   </div>
 
@@ -1273,7 +1290,7 @@ function DeptMap({ config, isAdmin }) {
                 </>
               ) : (
                 <>
-                  <div className="profile-photo">{GENDER_ICONS[viewProfile.gender] || GENDER_ICONS[""]}</div>
+                  <div className="profile-photo"><ProfileAvatar gender={viewProfile.gender} /></div>
                   {viewProfile.tier && (
                     <p className="profile-tier">{viewProfile.tier === "A" ? "👑 A-Adviseur" : "B-Adviseur"}</p>
                   )}

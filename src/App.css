@@ -108,8 +108,9 @@ html, body, #root { height: 100%; margin: 0; }
 .advisor-list button {
   width: 100%;
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
   text-align: left;
   padding: 6px 10px;
   border-radius: 8px;
@@ -117,6 +118,19 @@ html, body, #root { height: 100%; margin: 0; }
   background: transparent;
   font-size: 13px;
   cursor: pointer;
+}
+
+.advisor-row-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.advisor-row-icons {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-left: 16px;
 }
 
 .advisor-list button:hover {
@@ -721,10 +735,20 @@ html, body, #root { height: 100%; margin: 0; }
 }
 
 .profile-photo {
+  display: flex;
+  justify-content: center;
+  align-items: center;
   font-size: 48px;
-  text-align: center;
   line-height: 1;
   margin: 4px 0 8px;
+}
+
+.profile-photo-img {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
 }
 
 .profile-tier {
