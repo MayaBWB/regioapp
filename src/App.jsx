@@ -36,6 +36,36 @@ const VLAANDEREN_TAG_DEFS = [
   { id: "wplw", emoji: "🔥", label: "Warmtepomp lucht-water" },
 ];
 
+const PRODUCT_DEFS = [
+  { id: "airco", emoji: "🌬️", label: "Airco" },
+  { id: "zp", emoji: "☀️", label: "Zonnepanelen" },
+  { id: "thuisbatterij", emoji: "🔋", label: "Thuisbatterij" },
+  { id: "wplw", emoji: "🔥", label: "Lucht-Water warmtepomp" },
+  { id: "wpb", emoji: "💧", label: "Warmtepompboiler" },
+];
+
+const LANGUAGE_DEFS = ["FR", "NL", "ENG"];
+
+const GENDER_ICONS = { m: "🧔", v: "👩", "": "🧑" };
+
+const ONLINE_OFFERTE_LABELS = { ja: "👍 Ja!", nee: "👎 Nee!", eigen_klant: "Enkel eigen klant" };
+
+function emptyProfile() {
+  return {
+    gender: "",
+    tier: "",
+    products: [],
+    onlineOfferte: "",
+    languages: [],
+    languagesExtra: "",
+    thuisbatterijEnkel: "",
+    homeBasePostcode: "",
+    homeBaseCity: "",
+    travelRadiusMin: "",
+    extraInfo: "",
+  };
+}
+
 // elk departement is volledig apart: eigen kaartdata, eigen adviseurs, eigen
 // opslag-sleutel. Ze delen geen data en botsen dus nooit met elkaar.
 const DEPARTMENTS = [
@@ -59,6 +89,8 @@ const DEPARTMENTS = [
     tagsFirebasePath: "advisorTagOverrides",
     deletedStorageKey: "advisor-deleted-overrides",
     deletedFirebasePath: "advisorDeletedOverrides",
+    profilesStorageKey: "advisor-profiles",
+    profilesFirebasePath: "advisorProfiles",
   },
   {
     id: "alkmaar",
@@ -80,6 +112,8 @@ const DEPARTMENTS = [
     tagsFirebasePath: "advisorTagOverridesAlkmaar",
     deletedStorageKey: "advisor-deleted-overrides-alkmaar",
     deletedFirebasePath: "advisorDeletedOverridesAlkmaar",
+    profilesStorageKey: "advisor-profiles-alkmaar",
+    profilesFirebasePath: "advisorProfilesAlkmaar",
   },
 ];
 
@@ -136,10 +170,15 @@ function centroidOfRing(ring) {
   return [sy / ring.length, sx / ring.length];
 }
 
-function MapEvents({ onZoom }) {
+function MapEvents({ onZoom, onBounds }) {
   const map = useMapEvents({
     zoomend: () => onZoom(map.getZoom()),
+    moveend: () => onBounds(map.getBounds()),
   });
+  useEffect(() => {
+    onBounds(map.getBounds());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   return null;
 }
 
@@ -189,6 +228,7 @@ function DeptMap({ config, isAdmin }) {
     notesSeed, notesStorageKey, notesFirebasePath,
     tagDefs, advisorTagsBase, tagsStorageKey, tagsFirebasePath,
     deletedStorageKey, deletedFirebasePath,
+    profilesStorageKey, profilesFirebasePath,
   } = config;
 
   const [postcodesGeo, setPostcodesGeo] = useState(null);
@@ -196,6 +236,7 @@ function DeptMap({ config, isAdmin }) {
   const [overrides, setOverrides] = useState(() => loadOverrides(storageKey));
   const [tagOverrides, setTagOverrides] = useState(() => loadOverrides(tagsStorageKey));
   const [deletedAdvisors, setDeletedAdvisors] = useState(() => loadOverrides(deletedStorageKey));
+  const [profiles, setProfiles] = useState(() => loadOverrides(profilesStorageKey));
   const [notesList, setNotesList] = useState(() => {
     try {
       const raw = localStorage.getItem(notesStorageKey);
@@ -208,6 +249,7 @@ function DeptMap({ config, isAdmin }) {
   const [draft, setDraft] = useState("");
   const [saved, setSaved] = useState(false);
   const [zoom, setZoom] = useState(initialZoom);
+  const [mapBounds, setMapBounds] = useState(null);
   const [searchFields, setSearchFields] = useState(["", ""]);
   const [activeSearch, setActiveSearch] = useState([]);
   const [searchError, setSearchError] = useState("");
@@ -222,12 +264,16 @@ function DeptMap({ config, isAdmin }) {
   const [noteDraftName, setNoteDraftName] = useState("");
   const [noteDraftDate, setNoteDraftDate] = useState("");
   const [noteError, setNoteError] = useState("");
+  const [profileViewName, setProfileViewName] = useState(null);
+  const [profileDraft, setProfileDraft] = useState(null);
+  const [profileSaved, setProfileSaved] = useState(false);
   const mapRef = useRef(null);
-  const homeRenderer = useMemo(() => L.svg({ pane: "homes" }), []);
+  const canvasRenderer = useMemo(() => L.canvas(), []);
   const advisorLayerRef = useRef(null);
-  const searchLayerRef = useRef(null);
   const panelRef = useRef(null);
   const notesSeededRef = useRef(false);
+  const handlePostcodeClickRef = useRef(() => {});
+  const activePopupRef = useRef(null);
 
   useEffect(() => {
     if (firebaseEnabled) {
@@ -249,6 +295,13 @@ function DeptMap({ config, isAdmin }) {
       return unsubscribe;
     }
   }, [deletedFirebasePath]);
+
+  useEffect(() => {
+    if (firebaseEnabled) {
+      const unsubscribe = subscribeToOverrides(profilesFirebasePath, (shared) => setProfiles(shared));
+      return unsubscribe;
+    }
+  }, [profilesFirebasePath]);
 
   useEffect(() => {
     if (!firebaseEnabled) return;
@@ -277,6 +330,14 @@ function DeptMap({ config, isAdmin }) {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [panelAdvisor]);
+
+  useEffect(() => {
+    if (!profileViewName) return;
+    const onKeyDown = (e) => { if (e.key === "Escape") closeProfile(); };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profileViewName]);
 
   const advisorPostcodes = useMemo(() => {
     return { ...advisorPostcodesBase, ...overrides };
@@ -348,6 +409,14 @@ function DeptMap({ config, isAdmin }) {
     return Object.entries(postcodeToCentroid).map(([pc, c]) => ({ pc, lat: c[0], lng: c[1] }));
   }, [postcodeToCentroid]);
 
+  // only the postcodes near the current viewport get their own label layer --
+  // rendering all ~1000+ nationwide on every zoom-in is what caused the lag
+  const visiblePostcodeLabels = useMemo(() => {
+    if (!mapBounds) return postcodeLabels;
+    const padded = mapBounds.pad(0.25);
+    return postcodeLabels.filter(({ lat, lng }) => padded.contains([lat, lng]));
+  }, [postcodeLabels, mapBounds]);
+
   const activeNotes = useMemo(() => {
     const today = new Date();
     return (notesList || []).filter((n) => new Date(n.expires) >= today);
@@ -372,31 +441,33 @@ function DeptMap({ config, isAdmin }) {
   const colorIndex = selected ? advisorNames.indexOf(selected) : 0;
   const highlightColor = colorForIndex(colorIndex);
 
+  const searchByPostcode = useMemo(() => {
+    const m = new Map();
+    activeSearch.forEach((s) => {
+      if (!m.has(s.postcode)) m.set(s.postcode, s);
+    });
+    return m;
+  }, [activeSearch]);
+
+  // one combined style fn/layer instead of a separate advisor-highlight layer
+  // and search-highlight layer stacked on top of the same 1000+ polygons
   const styleFn = (feature) => {
-    const isActive = selectedPostcodeSet && selectedPostcodeSet.has(feature.properties.postcode);
+    const pc = feature.properties.postcode;
+    const hit = searchByPostcode.get(pc);
+    if (hit) {
+      return { fillColor: hit.color, fillOpacity: 0.5, color: hit.color, weight: 3 };
+    }
+    const isActive = selectedPostcodeSet && selectedPostcodeSet.has(pc);
     if (isActive) {
       return { fillColor: highlightColor, fillOpacity: 0.4, color: highlightColor, weight: 1.5 };
     }
     return { fillColor: "#888", fillOpacity: 0, color: "#999", weight: 0.3 };
   };
 
-  const searchStyleFn = (feature) => {
-    const hit = activeSearch.find((s) => s.postcode === feature.properties.postcode);
-    if (hit) {
-      return { fillColor: hit.color, fillOpacity: 0.5, color: hit.color, weight: 3 };
-    }
-    return { fillOpacity: 0, opacity: 0, weight: 0 };
-  };
-
   useEffect(() => {
     if (advisorLayerRef.current) advisorLayerRef.current.setStyle(styleFn);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPostcodeSet, highlightColor]);
-
-  useEffect(() => {
-    if (searchLayerRef.current) searchLayerRef.current.setStyle(searchStyleFn);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSearch]);
+  }, [selectedPostcodeSet, highlightColor, searchByPostcode]);
 
   function selectAdvisor(name) {
     if (selected === name) {
@@ -432,6 +503,10 @@ function DeptMap({ config, isAdmin }) {
     setPanelPcDraft((advisorPostcodes[name] || []).join(", "));
     setPanelTags(advisorTags[name] || []);
     setPanelSaved(false);
+    // keep the map highlight in sync so the admin can see what they're editing
+    setSelected(name);
+    setDraft((advisorPostcodes[name] || []).join(", "));
+    setSaved(false);
   }
 
   function closePanel() {
@@ -441,6 +516,62 @@ function DeptMap({ config, isAdmin }) {
   function togglePanelTag(id) {
     setPanelTags((prev) => (prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]));
   }
+
+  function applyPostcodeToggle(pc, has) {
+    const current = advisorPostcodes[selected] || [];
+    const nextList = has
+      ? current.filter((p) => p !== pc)
+      : Array.from(new Set([...current, pc])).sort();
+    const nextOverrides = { ...overrides, [selected]: nextList };
+    setOverrides(nextOverrides);
+    if (firebaseEnabled) {
+      saveOverridesShared(firebasePath, nextOverrides);
+    } else {
+      saveOverridesLocal(storageKey, nextOverrides);
+    }
+
+    setDraft(nextList.join(", "));
+    if (panelAdvisor === selected) setPanelPcDraft(nextList.join(", "));
+  }
+
+  // bound once via onEachFeature, so re-assigning this every render (instead of
+  // relying on the closure captured at mount) keeps it seeing current state
+  handlePostcodeClickRef.current = function handlePostcodeMapClick(pc, latlng) {
+    if (!isAdmin || !selected || !mapRef.current) return;
+    const current = advisorPostcodes[selected] || [];
+    const has = current.includes(pc);
+    const label = postcodeNames[pc] ? `${pc} (${postcodeNames[pc]})` : pc;
+
+    if (activePopupRef.current) {
+      activePopupRef.current.close();
+    }
+
+    const container = document.createElement("div");
+    container.className = "postcode-popup-content";
+
+    const title = document.createElement("div");
+    title.className = "postcode-popup-title";
+    title.textContent = `${label} · ${selected}`;
+    container.appendChild(title);
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = has ? "postcode-popup-btn remove" : "postcode-popup-btn add";
+    btn.textContent = has ? "Verwijderen" : "Toevoegen";
+    container.appendChild(btn);
+
+    const popup = L.popup({ closeButton: true, className: "postcode-popup" })
+      .setLatLng(latlng)
+      .setContent(container);
+
+    btn.addEventListener("click", () => {
+      applyPostcodeToggle(pc, has);
+      popup.close();
+    });
+
+    activePopupRef.current = popup;
+    popup.openOn(mapRef.current);
+  };
 
   function savePanel() {
     if (!isAdmin) return;
@@ -490,6 +621,46 @@ function DeptMap({ config, isAdmin }) {
       setDraft("");
     }
     setPanelAdvisor(null);
+  }
+
+  function openProfile(name) {
+    setProfileViewName(name);
+    setProfileSaved(false);
+    if (isAdmin) {
+      setProfileDraft({ ...emptyProfile(), ...(profiles[name] || {}) });
+    }
+  }
+
+  function closeProfile() {
+    setProfileViewName(null);
+    setProfileDraft(null);
+  }
+
+  function updateProfileField(field, value) {
+    setProfileDraft((prev) => ({ ...prev, [field]: value }));
+  }
+
+  function toggleProfileListField(field, value) {
+    setProfileDraft((prev) => {
+      const list = prev[field] || [];
+      return {
+        ...prev,
+        [field]: list.includes(value) ? list.filter((v) => v !== value) : [...list, value],
+      };
+    });
+  }
+
+  function saveProfile() {
+    if (!isAdmin || !profileViewName || !profileDraft) return;
+    const next = { ...profiles, [profileViewName]: profileDraft };
+    setProfiles(next);
+    if (firebaseEnabled) {
+      saveOverridesShared(profilesFirebasePath, next);
+    } else {
+      saveOverridesLocal(profilesStorageKey, next);
+    }
+    setProfileSaved(true);
+    setTimeout(() => setProfileSaved(false), 1500);
   }
 
   function pruneExpiredNotes(list) {
@@ -703,7 +874,7 @@ function DeptMap({ config, isAdmin }) {
             const nameTags = advisorTags[name] || [];
             const isPrio = tagDefs.some((td) => td.bold && nameTags.includes(td.id));
             return (
-              <li key={name}>
+              <li key={name} className="advisor-row">
                 <button
                   className={selected === name ? "active" : ""}
                   style={
@@ -725,6 +896,14 @@ function DeptMap({ config, isAdmin }) {
                   {tagDefs.map((td) => nameTags.includes(td.id) && <span key={td.id} title={td.label}>{td.emoji}</span>)}
                   {(overrides[name] || tagOverrides[name]) && <span className="edited-mark" title="Aangepast">●</span>}
                 </button>
+                <button
+                  className="profile-btn"
+                  onClick={() => openProfile(name)}
+                  title="Profiel bekijken"
+                  aria-label={`Profiel van ${name}`}
+                >
+                  👤
+                </button>
               </li>
             );
           })}
@@ -734,6 +913,7 @@ function DeptMap({ config, isAdmin }) {
           <div className="editor">
             <h2>{selected}</h2>
             <p className="hint">Postcodes, gescheiden door komma</p>
+            <p className="hint">Of klik een postcode op de kaart om toe te voegen/verwijderen</p>
             <textarea rows={6} value={draft} onChange={(e) => setDraft(e.target.value)} />
             {unknownInDraft.length > 0 && (
               <p className="warning">Onbekend of ongeldig: {unknownInDraft.join(", ")}</p>
@@ -800,13 +980,18 @@ function DeptMap({ config, isAdmin }) {
             attribution='&copy; OpenStreetMap contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
-          <MapEvents onZoom={setZoom} />
+          <MapEvents onZoom={setZoom} onBounds={setMapBounds} />
 
           {postcodesGeo && (
-            <GeoJSON ref={advisorLayerRef} data={postcodesGeo} style={styleFn} />
-          )}
-          {postcodesGeo && (
-            <GeoJSON ref={searchLayerRef} data={postcodesGeo} style={searchStyleFn} />
+            <GeoJSON
+              ref={advisorLayerRef}
+              data={postcodesGeo}
+              style={styleFn}
+              renderer={canvasRenderer}
+              onEachFeature={(feature, layer) => {
+                layer.on("click", (e) => handlePostcodeClickRef.current(feature.properties.postcode, e.latlng));
+              }}
+            />
           )}
 
           {!showPostcodeLabels &&
@@ -817,7 +1002,7 @@ function DeptMap({ config, isAdmin }) {
             ))}
 
           {showPostcodeLabels &&
-            postcodeLabels.map(({ pc, lat, lng }) => (
+            visiblePostcodeLabels.map(({ pc, lat, lng }) => (
               <CircleMarker key={"pc-" + pc} center={[lat, lng]} radius={1} pathOptions={{ opacity: 0, fillOpacity: 0 }}>
                 <Tooltip permanent direction="center" className="postcode-label">{pc}</Tooltip>
               </CircleMarker>
@@ -849,25 +1034,30 @@ function DeptMap({ config, isAdmin }) {
                 icon={L.divIcon({ html: "🏠", className: "home-house-icon", iconSize: [26, 26], iconAnchor: [13, 26] })}
               />
             )}
-            {Object.entries(homeCoords).map(([name, latlng]) => (
-              <CircleMarker
-                key={name}
-                center={latlng}
-                renderer={homeRenderer}
-                radius={selected === name ? 7 : 4}
-                pathOptions={{
-                  color: "#222",
-                  weight: 1,
-                  fillColor: selected === name ? highlightColor : "#444",
-                  fillOpacity: 1,
-                }}
-                eventHandlers={{ click: () => selectAdvisor(name) }}
-              >
-                <Tooltip>
-                  {name} · {postcodeNames[advisorsHome[name]?.postcode] || advisorsHome[name]?.city} ({advisorsHome[name]?.postcode})
-                </Tooltip>
-              </CircleMarker>
-            ))}
+            {Object.entries(homeCoords).map(([name, latlng]) => {
+              const isSel = selected === name;
+              const dotSize = isSel ? 14 : 8;
+              const dotColor = isSel ? highlightColor : "#444";
+              return (
+                <Marker
+                  key={name}
+                  position={latlng}
+                  // offset into the top-right corner of the postcode, like a
+                  // notification badge, instead of sitting on the postcode label
+                  icon={L.divIcon({
+                    html: `<span class="home-dot" style="width:${dotSize}px;height:${dotSize}px;background:${dotColor};"></span>`,
+                    className: "home-dot-icon",
+                    iconSize: [20, 20],
+                    iconAnchor: [1, 19],
+                  })}
+                  eventHandlers={{ click: () => selectAdvisor(name) }}
+                >
+                  <Tooltip>
+                    {name} · {postcodeNames[advisorsHome[name]?.postcode] || advisorsHome[name]?.city} ({advisorsHome[name]?.postcode})
+                  </Tooltip>
+                </Marker>
+              );
+            })}
           </Pane>
         </MapContainer>
       </main>
@@ -881,6 +1071,7 @@ function DeptMap({ config, isAdmin }) {
               <button className="advisor-panel-close" onClick={closePanel} aria-label="Sluiten">×</button>
             </div>
             <p className="hint">Postcodes, gescheiden door komma</p>
+            <p className="hint">Of klik een postcode op de kaart om toe te voegen/verwijderen</p>
             <textarea rows={5} value={panelPcDraft} onChange={(e) => setPanelPcDraft(e.target.value)} />
             {panelUnknown.length > 0 && (
               <p className="warning">Onbekend of ongeldig: {panelUnknown.join(", ")}</p>
@@ -959,6 +1150,193 @@ function DeptMap({ config, isAdmin }) {
           </div>
         </>
       )}
+
+      {profileViewName && (() => {
+        const viewProfile = profiles[profileViewName] || emptyProfile();
+        return (
+          <>
+            <div className="advisor-panel-backdrop" onClick={closeProfile} />
+            <div className="advisor-panel profile-panel">
+              <div className="advisor-panel-header">
+                <h2>{profileViewName}</h2>
+                <button className="advisor-panel-close" onClick={closeProfile} aria-label="Sluiten">×</button>
+              </div>
+
+              {isAdmin && profileDraft ? (
+                <>
+                  <div className="profile-photo">{GENDER_ICONS[profileDraft.gender] || GENDER_ICONS[""]}</div>
+                  <div className="profile-section">
+                    <p className="hint">Profielfoto</p>
+                    <div className="profile-radio-row">
+                      <label><input type="radio" name="gender" checked={profileDraft.gender === "m"} onChange={() => updateProfileField("gender", "m")} /> Mannetje</label>
+                      <label><input type="radio" name="gender" checked={profileDraft.gender === "v"} onChange={() => updateProfileField("gender", "v")} /> Vrouwtje</label>
+                    </div>
+                  </div>
+
+                  <div className="profile-section">
+                    <p className="hint">👑 Type adviseur</p>
+                    <div className="profile-radio-row">
+                      <label><input type="radio" name="tier" checked={profileDraft.tier === "A"} onChange={() => updateProfileField("tier", "A")} /> 👑 A-Adviseur</label>
+                      <label><input type="radio" name="tier" checked={profileDraft.tier === "B"} onChange={() => updateProfileField("tier", "B")} /> B-Adviseur</label>
+                    </div>
+                  </div>
+
+                  <div className="profile-section">
+                    <p className="hint">Welke producten</p>
+                    {PRODUCT_DEFS.map((p) => (
+                      <label key={p.id} className="profile-checkbox-row">
+                        <input
+                          type="checkbox"
+                          checked={profileDraft.products.includes(p.id)}
+                          onChange={() => toggleProfileListField("products", p.id)}
+                        />
+                        <span>{p.emoji} {p.label}</span>
+                      </label>
+                    ))}
+                  </div>
+
+                  <div className="profile-section">
+                    <p className="hint">Online offerte</p>
+                    <div className="profile-radio-row">
+                      <label><input type="radio" name="onlineOfferte" checked={profileDraft.onlineOfferte === "ja"} onChange={() => updateProfileField("onlineOfferte", "ja")} /> 👍 Ja!</label>
+                      <label><input type="radio" name="onlineOfferte" checked={profileDraft.onlineOfferte === "nee"} onChange={() => updateProfileField("onlineOfferte", "nee")} /> 👎 Nee!</label>
+                      <label><input type="radio" name="onlineOfferte" checked={profileDraft.onlineOfferte === "eigen_klant"} onChange={() => updateProfileField("onlineOfferte", "eigen_klant")} /> Enkel eigen klant</label>
+                    </div>
+                  </div>
+
+                  <div className="profile-section">
+                    <p className="hint">Welke talen</p>
+                    {LANGUAGE_DEFS.map((lang) => (
+                      <label key={lang} className="profile-checkbox-row">
+                        <input
+                          type="checkbox"
+                          checked={profileDraft.languages.includes(lang)}
+                          onChange={() => toggleProfileListField("languages", lang)}
+                        />
+                        <span>{lang}</span>
+                      </label>
+                    ))}
+                    <input
+                      type="text"
+                      placeholder="Andere taal, vrij in te voeren"
+                      value={profileDraft.languagesExtra}
+                      onChange={(e) => updateProfileField("languagesExtra", e.target.value)}
+                    />
+                  </div>
+
+                  <div className="profile-section">
+                    <p className="hint">Doet een afspraak voor ENKEL een thuisbatterij</p>
+                    <div className="profile-radio-row">
+                      <label><input type="radio" name="thuisbatterijEnkel" checked={profileDraft.thuisbatterijEnkel === "ja"} onChange={() => updateProfileField("thuisbatterijEnkel", "ja")} /> 👍 Ja!</label>
+                      <label><input type="radio" name="thuisbatterijEnkel" checked={profileDraft.thuisbatterijEnkel === "nee"} onChange={() => updateProfileField("thuisbatterijEnkel", "nee")} /> 👎 Nee!</label>
+                    </div>
+                  </div>
+
+                  <div className="profile-section">
+                    <p className="hint">Thuisbasis (postcode en gemeente)</p>
+                    <input
+                      type="text"
+                      placeholder={advisorsHome[profileViewName]?.postcode || "Postcode"}
+                      value={profileDraft.homeBasePostcode}
+                      onChange={(e) => updateProfileField("homeBasePostcode", e.target.value)}
+                    />
+                    <input
+                      type="text"
+                      placeholder={advisorsHome[profileViewName]?.city || "Gemeente"}
+                      value={profileDraft.homeBaseCity}
+                      onChange={(e) => updateProfileField("homeBaseCity", e.target.value)}
+                    />
+                  </div>
+
+                  <div className="profile-section">
+                    <p className="hint">Eerste/laatste afspraak: max. … min van thuisbasis</p>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="Minuten"
+                      value={profileDraft.travelRadiusMin}
+                      onChange={(e) => updateProfileField("travelRadiusMin", e.target.value)}
+                    />
+                  </div>
+
+                  <div className="profile-section">
+                    <p className="hint">Extra info</p>
+                    <textarea rows={4} value={profileDraft.extraInfo} onChange={(e) => updateProfileField("extraInfo", e.target.value)} />
+                  </div>
+
+                  <div className="editor-actions">
+                    <button className="save-btn" onClick={saveProfile}>
+                      {profileSaved ? "Opgeslagen ✓" : "Opslaan"}
+                    </button>
+                    <button className="panel-close-btn" onClick={closeProfile}>Sluiten</button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="profile-photo">{GENDER_ICONS[viewProfile.gender] || GENDER_ICONS[""]}</div>
+                  {viewProfile.tier && (
+                    <p className="profile-tier">{viewProfile.tier === "A" ? "👑 A-Adviseur" : "B-Adviseur"}</p>
+                  )}
+
+                  <div className="profile-section">
+                    <p className="hint">Welke producten</p>
+                    <div className="profile-chip-row">
+                      {PRODUCT_DEFS.filter((p) => viewProfile.products.includes(p.id)).map((p) => (
+                        <span key={p.id} className="profile-chip">{p.emoji} {p.label}</span>
+                      ))}
+                      {viewProfile.products.length === 0 && <span className="hint">Nog niet ingevuld</span>}
+                    </div>
+                  </div>
+
+                  <div className="profile-section">
+                    <p className="hint">Online offerte</p>
+                    <p>{ONLINE_OFFERTE_LABELS[viewProfile.onlineOfferte] || "Nog niet ingevuld"}</p>
+                  </div>
+
+                  <div className="profile-section">
+                    <p className="hint">Welke talen</p>
+                    <p>{[...viewProfile.languages, viewProfile.languagesExtra].filter(Boolean).join(", ") || "Nog niet ingevuld"}</p>
+                  </div>
+
+                  <div className="profile-section">
+                    <p className="hint">Doet een afspraak voor ENKEL een thuisbatterij</p>
+                    <p>
+                      {viewProfile.thuisbatterijEnkel === "ja"
+                        ? "👍 Ja!"
+                        : viewProfile.thuisbatterijEnkel === "nee"
+                        ? "👎 Nee!"
+                        : "Nog niet ingevuld"}
+                    </p>
+                  </div>
+
+                  <div className="profile-section">
+                    <p className="hint">Thuisbasis</p>
+                    <p>
+                      {viewProfile.homeBasePostcode || advisorsHome[profileViewName]?.postcode || "?"}
+                      {" · "}
+                      {viewProfile.homeBaseCity || postcodeNames[advisorsHome[profileViewName]?.postcode] || advisorsHome[profileViewName]?.city || ""}
+                    </p>
+                  </div>
+
+                  <div className="profile-section">
+                    <p className="hint">Reisradius eerste/laatste afspraak</p>
+                    <p>{viewProfile.travelRadiusMin ? `max. ${viewProfile.travelRadiusMin} min van thuisbasis` : "Nog niet ingevuld"}</p>
+                  </div>
+
+                  <div className="profile-section">
+                    <p className="hint">Extra info</p>
+                    <p className="profile-extra-info">{viewProfile.extraInfo || "-"}</p>
+                  </div>
+
+                  <div className="editor-actions">
+                    <button className="panel-close-btn" onClick={closeProfile}>Sluiten</button>
+                  </div>
+                </>
+              )}
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 }
