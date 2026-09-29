@@ -698,6 +698,16 @@ html, body, #root { height: 100%; margin: 0; }
   margin-top: 6px;
 }
 
+.advisor-panel-home-input {
+  width: 100%;
+  font-size: 12px;
+  font-family: inherit;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  margin-top: 6px;
+}
+
 .advisor-panel-tags {
   margin-top: 14px;
   padding-top: 10px;

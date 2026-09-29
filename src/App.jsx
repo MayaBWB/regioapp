@@ -67,8 +67,6 @@ function emptyProfile() {
     languages: [],
     languagesExtra: "",
     thuisbatterijEnkel: "",
-    homeBasePostcode: "",
-    homeBaseCity: "",
     travelRadiusMin: "",
     extraInfo: "",
   };
@@ -99,6 +97,8 @@ const DEPARTMENTS = [
     deletedFirebasePath: "advisorDeletedOverrides",
     addedStorageKey: "advisor-added-overrides",
     addedFirebasePath: "advisorAddedOverrides",
+    homeStorageKey: "advisor-home-overrides",
+    homeFirebasePath: "advisorHomeOverrides",
     profilesStorageKey: "advisor-profiles",
     profilesFirebasePath: "advisorProfiles",
   },
@@ -124,6 +124,8 @@ const DEPARTMENTS = [
     deletedFirebasePath: "advisorDeletedOverridesAlkmaar",
     addedStorageKey: "advisor-added-overrides-alkmaar",
     addedFirebasePath: "advisorAddedOverridesAlkmaar",
+    homeStorageKey: "advisor-home-overrides-alkmaar",
+    homeFirebasePath: "advisorHomeOverridesAlkmaar",
     profilesStorageKey: "advisor-profiles-alkmaar",
     profilesFirebasePath: "advisorProfilesAlkmaar",
   },
@@ -258,6 +260,7 @@ function DeptMap({ config, isAdmin }) {
     tagDefs, advisorTagsBase, tagsStorageKey, tagsFirebasePath,
     deletedStorageKey, deletedFirebasePath,
     addedStorageKey, addedFirebasePath,
+    homeStorageKey, homeFirebasePath,
     profilesStorageKey, profilesFirebasePath,
   } = config;
 
@@ -267,6 +270,7 @@ function DeptMap({ config, isAdmin }) {
   const [tagOverrides, setTagOverrides] = useState(() => loadOverrides(tagsStorageKey));
   const [deletedAdvisors, setDeletedAdvisors] = useState(() => loadOverrides(deletedStorageKey));
   const [addedAdvisors, setAddedAdvisors] = useState(() => loadOverrides(addedStorageKey));
+  const [homeOverrides, setHomeOverrides] = useState(() => loadOverrides(homeStorageKey));
   const [profiles, setProfiles] = useState(() => loadOverrides(profilesStorageKey));
   const [notesList, setNotesList] = useState(() => {
     try {
@@ -292,6 +296,7 @@ function DeptMap({ config, isAdmin }) {
   const [panelSaved, setPanelSaved] = useState(false);
   const [panelNameDraft, setPanelNameDraft] = useState("");
   const [panelNameError, setPanelNameError] = useState("");
+  const [panelHomeDraft, setPanelHomeDraft] = useState("");
   const [notesPanelOpen, setNotesPanelOpen] = useState(false);
   const [noteDraftPostcode, setNoteDraftPostcode] = useState("");
   const [noteDraftName, setNoteDraftName] = useState("");
@@ -300,6 +305,7 @@ function DeptMap({ config, isAdmin }) {
   const [profileViewName, setProfileViewName] = useState(null);
   const [profileDraft, setProfileDraft] = useState(null);
   const [profileSaved, setProfileSaved] = useState(false);
+  const [profileHomeDraft, setProfileHomeDraft] = useState("");
   const [newAdvisorName, setNewAdvisorName] = useState("");
   const [addAdvisorError, setAddAdvisorError] = useState("");
   const [toast, setToast] = useState("");
@@ -340,6 +346,13 @@ function DeptMap({ config, isAdmin }) {
       return unsubscribe;
     }
   }, [addedFirebasePath]);
+
+  useEffect(() => {
+    if (firebaseEnabled) {
+      const unsubscribe = subscribeToOverrides(homeFirebasePath, (shared) => setHomeOverrides(shared));
+      return unsubscribe;
+    }
+  }, [homeFirebasePath]);
 
   // one-time backfill: copy each advisor's original product tags into their
   // profile, since the profile used to be a separate, empty data store
@@ -468,14 +481,24 @@ function DeptMap({ config, isAdmin }) {
 
   const availablePostcodes = useMemo(() => new Set(Object.keys(postcodeToCentroid)), [postcodeToCentroid]);
 
+  // one shared home postcode per advisor, editable from either the profile
+  // or the normal edit popup -- the bundled advisorsHome.json is just the
+  // starting point, homeOverrides (live/Firebase-synced) always wins
+  const advisorHomePostcode = useMemo(() => {
+    const merged = {};
+    Object.entries(advisorsHome).forEach(([name, info]) => { merged[name] = info?.postcode; });
+    Object.entries(homeOverrides).forEach(([name, pc]) => { merged[name] = pc; });
+    return merged;
+  }, [advisorsHome, homeOverrides]);
+
   const homeCoords = useMemo(() => {
     const coords = {};
-    Object.entries(advisorsHome).forEach(([name, info]) => {
+    Object.entries(advisorHomePostcode).forEach(([name, pc]) => {
       if (deletedAdvisors[name]) return;
-      if (postcodeToCentroid[info.postcode]) coords[name] = postcodeToCentroid[info.postcode];
+      if (pc && postcodeToCentroid[pc]) coords[name] = postcodeToCentroid[pc];
     });
     return coords;
-  }, [postcodeToCentroid, advisorsHome, deletedAdvisors]);
+  }, [postcodeToCentroid, advisorHomePostcode, deletedAdvisors]);
 
   const zoneLabels = useMemo(() => {
     const groups = {};
@@ -597,6 +620,7 @@ function DeptMap({ config, isAdmin }) {
     setPanelSaved(false);
     setPanelNameDraft(name);
     setPanelNameError("");
+    setPanelHomeDraft(advisorHomePostcode[name] || "");
     // keep the map highlight in sync so the admin can see what they're editing
     setSelected(name);
     setDraft((advisorPostcodes[name] || []).join(", "));
@@ -711,6 +735,26 @@ function DeptMap({ config, isAdmin }) {
       }
     }
 
+    // home postcode -- shared with the profile editor, so either place can
+    // set it and both stay in sync
+    const homePc = panelHomeDraft.trim();
+    const homeValid = !homePc || (/^\d{4}$/.test(homePc) && availablePostcodes.has(homePc));
+    if (homeValid) {
+      const nextHome = { ...homeOverrides };
+      delete nextHome[oldName];
+      if (homePc) {
+        nextHome[newName] = homePc;
+      } else {
+        delete nextHome[newName];
+      }
+      setHomeOverrides(nextHome);
+      if (firebaseEnabled) {
+        saveOverridesShared(homeFirebasePath, nextHome);
+      } else {
+        saveOverridesLocal(homeStorageKey, nextHome);
+      }
+    }
+
     if (renaming) {
       // move the profile over too, since it's also keyed by name
       if (profiles[oldName]) {
@@ -819,6 +863,7 @@ function DeptMap({ config, isAdmin }) {
     setProfileSaved(false);
     if (isAdmin) {
       setProfileDraft({ ...emptyProfile(), ...(profiles[name] || {}) });
+      setProfileHomeDraft(advisorHomePostcode[name] || "");
     }
   }
 
@@ -850,6 +895,25 @@ function DeptMap({ config, isAdmin }) {
     } else {
       saveOverridesLocal(profilesStorageKey, next);
     }
+
+    // home postcode -- shared with the normal edit popup, so either place
+    // can set it and both stay in sync
+    const homePc = profileHomeDraft.trim();
+    if (!homePc || (/^\d{4}$/.test(homePc) && availablePostcodes.has(homePc))) {
+      const nextHome = { ...homeOverrides };
+      if (homePc) {
+        nextHome[profileViewName] = homePc;
+      } else {
+        delete nextHome[profileViewName];
+      }
+      setHomeOverrides(nextHome);
+      if (firebaseEnabled) {
+        saveOverridesShared(homeFirebasePath, nextHome);
+      } else {
+        saveOverridesLocal(homeStorageKey, nextHome);
+      }
+    }
+
     setProfileSaved(true);
     setTimeout(() => setProfileSaved(false), 1500);
     showToast("Profiel opgeslagen");
@@ -910,6 +974,10 @@ function DeptMap({ config, isAdmin }) {
     .map((s) => s.trim())
     .filter((s) => s && (!/^\d{4}$/.test(s) || !availablePostcodes.has(s)));
 
+  const panelHomeInvalid = Boolean(
+    panelHomeDraft.trim() && !(/^\d{4}$/.test(panelHomeDraft.trim()) && availablePostcodes.has(panelHomeDraft.trim()))
+  );
+
   function reclampPanelToContent() {
     if (!panelRef.current) return;
     const rect = panelRef.current.getBoundingClientRect();
@@ -961,15 +1029,18 @@ function DeptMap({ config, isAdmin }) {
     localStorage.removeItem(tagsStorageKey);
     localStorage.removeItem(deletedStorageKey);
     localStorage.removeItem(addedStorageKey);
+    localStorage.removeItem(homeStorageKey);
     setOverrides({});
     setTagOverrides({});
     setDeletedAdvisors({});
     setAddedAdvisors({});
+    setHomeOverrides({});
     if (firebaseEnabled) {
       saveOverridesShared(firebasePath, {});
       saveOverridesShared(tagsFirebasePath, {});
       saveOverridesShared(deletedFirebasePath, {});
       saveOverridesShared(addedFirebasePath, {});
+      saveOverridesShared(homeFirebasePath, {});
     }
     setSelected(null);
     setDraft("");
@@ -1109,8 +1180,8 @@ function DeptMap({ config, isAdmin }) {
                     <span className="dot" style={{ background: colorForIndex(i) }} />
                     <span style={isPrio ? { fontWeight: 700, background: "#FFD70055", padding: "1px 5px", borderRadius: "4px" } : {}}>{name}</span>
                     {isPrio && <span title={prioLabel}>{prioEmoji}</span>}
-                    {advisorsHome[name]?.postcode && (
-                      <span className="home-pc">{advisorsHome[name].postcode}</span>
+                    {advisorHomePostcode[name] && (
+                      <span className="home-pc">{advisorHomePostcode[name]}</span>
                     )}
                     {(overrides[name] || tagOverrides[name]) && <span className="edited-mark" title="Aangepast">●</span>}
                   </span>
@@ -1277,7 +1348,7 @@ function DeptMap({ config, isAdmin }) {
                   eventHandlers={{ click: () => selectAdvisor(name) }}
                 >
                   <Tooltip>
-                    {name} · {postcodeNames[advisorsHome[name]?.postcode] || advisorsHome[name]?.city} ({advisorsHome[name]?.postcode})
+                    {name} · {postcodeNames[advisorHomePostcode[name]] || ""} ({advisorHomePostcode[name]})
                   </Tooltip>
                 </Marker>
               );
@@ -1306,6 +1377,15 @@ function DeptMap({ config, isAdmin }) {
             {panelUnknown.length > 0 && (
               <p className="warning">Onbekend of ongeldig: {panelUnknown.join(", ")}</p>
             )}
+            <p className="hint">Thuisbasis (postcode)</p>
+            <input
+              type="text"
+              className="advisor-panel-home-input"
+              placeholder="Postcode"
+              value={panelHomeDraft}
+              onChange={(e) => setPanelHomeDraft(e.target.value)}
+            />
+            {panelHomeInvalid && <p className="warning">Onbekende postcode</p>}
             {tagDefs.some((td) => td.bold) && (
               <div className="advisor-panel-tags">
                 <p className="hint">Prioriteit</p>
@@ -1464,19 +1544,19 @@ function DeptMap({ config, isAdmin }) {
                   </div>
 
                   <div className="profile-section">
-                    <p className="hint">Thuisbasis (postcode en gemeente)</p>
+                    <p className="hint">Thuisbasis (postcode)</p>
                     <input
                       type="text"
-                      placeholder={advisorsHome[profileViewName]?.postcode || "Postcode"}
-                      value={profileDraft.homeBasePostcode}
-                      onChange={(e) => updateProfileField("homeBasePostcode", e.target.value)}
+                      placeholder="Postcode"
+                      value={profileHomeDraft}
+                      onChange={(e) => setProfileHomeDraft(e.target.value)}
                     />
-                    <input
-                      type="text"
-                      placeholder={advisorsHome[profileViewName]?.city || "Gemeente"}
-                      value={profileDraft.homeBaseCity}
-                      onChange={(e) => updateProfileField("homeBaseCity", e.target.value)}
-                    />
+                    {profileHomeDraft.trim() && postcodeNames[profileHomeDraft.trim()] && (
+                      <p className="hint">{postcodeNames[profileHomeDraft.trim()]}</p>
+                    )}
+                    {profileHomeDraft.trim() && !availablePostcodes.has(profileHomeDraft.trim()) && (
+                      <p className="warning">Onbekende postcode</p>
+                    )}
                   </div>
 
                   <div className="profile-section">
@@ -1543,9 +1623,9 @@ function DeptMap({ config, isAdmin }) {
                   <div className="profile-section">
                     <p className="hint">Thuisbasis</p>
                     <p>
-                      {viewProfile.homeBasePostcode || advisorsHome[profileViewName]?.postcode || "?"}
-                      {" · "}
-                      {viewProfile.homeBaseCity || postcodeNames[advisorsHome[profileViewName]?.postcode] || advisorsHome[profileViewName]?.city || ""}
+                      {advisorHomePostcode[profileViewName]
+                        ? `${advisorHomePostcode[profileViewName]} · ${postcodeNames[advisorHomePostcode[profileViewName]] || ""}`
+                        : "Nog niet ingevuld"}
                     </p>
                   </div>
 
