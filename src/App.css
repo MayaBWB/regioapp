@@ -654,6 +654,25 @@ html, body, #root { height: 100%; margin: 0; }
   margin: 0;
 }
 
+.advisor-panel-name-input {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+}
+
+.advisor-panel-name-input:hover,
+.advisor-panel-name-input:focus {
+  border-color: #ccc;
+  background: #fff;
+  outline: none;
+}
+
 .advisor-panel-close {
   border: none;
   background: transparent;

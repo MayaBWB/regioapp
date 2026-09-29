@@ -290,6 +290,8 @@ function DeptMap({ config, isAdmin }) {
   const [panelPcDraft, setPanelPcDraft] = useState("");
   const [panelTags, setPanelTags] = useState([]);
   const [panelSaved, setPanelSaved] = useState(false);
+  const [panelNameDraft, setPanelNameDraft] = useState("");
+  const [panelNameError, setPanelNameError] = useState("");
   const [notesPanelOpen, setNotesPanelOpen] = useState(false);
   const [noteDraftPostcode, setNoteDraftPostcode] = useState("");
   const [noteDraftName, setNoteDraftName] = useState("");
@@ -593,6 +595,8 @@ function DeptMap({ config, isAdmin }) {
     setPanelPcDraft((advisorPostcodes[name] || []).join(", "));
     setPanelTags(advisorTags[name] || []);
     setPanelSaved(false);
+    setPanelNameDraft(name);
+    setPanelNameError("");
     // keep the map highlight in sync so the admin can see what they're editing
     setSelected(name);
     setDraft((advisorPostcodes[name] || []).join(", "));
@@ -665,13 +669,29 @@ function DeptMap({ config, isAdmin }) {
   };
 
   function savePanel() {
-    if (!isAdmin) return;
+    if (!isAdmin || !panelAdvisor) return;
+    const oldName = panelAdvisor;
+    const newName = panelNameDraft.trim();
+    if (!newName) {
+      setPanelNameError("Naam is verplicht");
+      return;
+    }
+    const renaming = newName !== oldName;
+    if (renaming && (advisorNames.includes(newName) || deletedAdvisors[newName])) {
+      setPanelNameError("Deze naam bestaat al");
+      return;
+    }
+    setPanelNameError("");
+
     const list = panelPcDraft
       .split(",")
       .map((s) => s.trim())
       .filter((s) => /^\d{4}$/.test(s));
     const uniquePcs = Array.from(new Set(list)).sort();
-    const nextOverrides = { ...overrides, [panelAdvisor]: uniquePcs };
+
+    const nextOverrides = { ...overrides };
+    delete nextOverrides[oldName];
+    nextOverrides[newName] = uniquePcs;
     setOverrides(nextOverrides);
     if (firebaseEnabled) {
       saveOverridesShared(firebasePath, nextOverrides);
@@ -680,7 +700,9 @@ function DeptMap({ config, isAdmin }) {
     }
 
     if (tagDefs && tagDefs.length) {
-      const nextTagOverrides = { ...tagOverrides, [panelAdvisor]: panelTags };
+      const nextTagOverrides = { ...tagOverrides };
+      delete nextTagOverrides[oldName];
+      nextTagOverrides[newName] = panelTags;
       setTagOverrides(nextTagOverrides);
       if (firebaseEnabled) {
         saveOverridesShared(tagsFirebasePath, nextTagOverrides);
@@ -689,10 +711,46 @@ function DeptMap({ config, isAdmin }) {
       }
     }
 
-    if (selected === panelAdvisor) setDraft(uniquePcs.join(", "));
+    if (renaming) {
+      // move the profile over too, since it's also keyed by name
+      if (profiles[oldName]) {
+        const nextProfiles = { ...profiles };
+        delete nextProfiles[oldName];
+        nextProfiles[newName] = profiles[oldName];
+        setProfiles(nextProfiles);
+        if (firebaseEnabled) {
+          saveOverridesShared(profilesFirebasePath, nextProfiles);
+        } else {
+          saveOverridesLocal(profilesStorageKey, nextProfiles);
+        }
+      }
+
+      // hide the old name and make sure the new one is tracked, regardless
+      // of whether oldName came from the bundled data or was added in-app
+      const nextDeleted = { ...deletedAdvisors, [oldName]: true };
+      setDeletedAdvisors(nextDeleted);
+      if (firebaseEnabled) {
+        saveOverridesShared(deletedFirebasePath, nextDeleted);
+      } else {
+        saveOverridesLocal(deletedStorageKey, nextDeleted);
+      }
+
+      const nextAdded = { ...addedAdvisors, [newName]: true };
+      setAddedAdvisors(nextAdded);
+      if (firebaseEnabled) {
+        saveOverridesShared(addedFirebasePath, nextAdded);
+      } else {
+        saveOverridesLocal(addedStorageKey, nextAdded);
+      }
+
+      setPanelAdvisor(newName);
+      if (selected === oldName) setSelected(newName);
+    }
+
+    if (selected === oldName || selected === newName) setDraft(uniquePcs.join(", "));
     setPanelSaved(true);
     setTimeout(() => setPanelSaved(false), 1500);
-    showToast("Wijzigingen opgeslagen");
+    showToast(renaming ? "Naam gewijzigd" : "Wijzigingen opgeslagen");
   }
 
   function deleteAdvisor() {
@@ -1230,9 +1288,15 @@ function DeptMap({ config, isAdmin }) {
           <div className="advisor-panel-backdrop" onClick={closePanel} />
           <div className="advisor-panel" ref={panelRef} style={{ top: panelTop, left: panelLeft }}>
             <div className="advisor-panel-header">
-              <h2>{panelAdvisor}</h2>
+              <input
+                type="text"
+                className="advisor-panel-name-input"
+                value={panelNameDraft}
+                onChange={(e) => { setPanelNameDraft(e.target.value); setPanelNameError(""); }}
+              />
               <button className="advisor-panel-close" onClick={closePanel} aria-label="Sluiten">×</button>
             </div>
+            {panelNameError && <p className="warning">{panelNameError}</p>}
             <p className="hint">Postcodes, gescheiden door komma</p>
             <p className="hint">Of klik een postcode op de kaart om toe te voegen/verwijderen</p>
             <textarea rows={5} value={panelPcDraft} onChange={(e) => setPanelPcDraft(e.target.value)} />
