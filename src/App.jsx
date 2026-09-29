@@ -97,6 +97,8 @@ const DEPARTMENTS = [
     tagsFirebasePath: "advisorTagOverrides",
     deletedStorageKey: "advisor-deleted-overrides",
     deletedFirebasePath: "advisorDeletedOverrides",
+    addedStorageKey: "advisor-added-overrides",
+    addedFirebasePath: "advisorAddedOverrides",
     profilesStorageKey: "advisor-profiles",
     profilesFirebasePath: "advisorProfiles",
   },
@@ -120,6 +122,8 @@ const DEPARTMENTS = [
     tagsFirebasePath: "advisorTagOverridesAlkmaar",
     deletedStorageKey: "advisor-deleted-overrides-alkmaar",
     deletedFirebasePath: "advisorDeletedOverridesAlkmaar",
+    addedStorageKey: "advisor-added-overrides-alkmaar",
+    addedFirebasePath: "advisorAddedOverridesAlkmaar",
     profilesStorageKey: "advisor-profiles-alkmaar",
     profilesFirebasePath: "advisorProfilesAlkmaar",
   },
@@ -253,6 +257,7 @@ function DeptMap({ config, isAdmin }) {
     notesSeed, notesStorageKey, notesFirebasePath,
     tagDefs, advisorTagsBase, tagsStorageKey, tagsFirebasePath,
     deletedStorageKey, deletedFirebasePath,
+    addedStorageKey, addedFirebasePath,
     profilesStorageKey, profilesFirebasePath,
   } = config;
 
@@ -261,6 +266,7 @@ function DeptMap({ config, isAdmin }) {
   const [overrides, setOverrides] = useState(() => loadOverrides(storageKey));
   const [tagOverrides, setTagOverrides] = useState(() => loadOverrides(tagsStorageKey));
   const [deletedAdvisors, setDeletedAdvisors] = useState(() => loadOverrides(deletedStorageKey));
+  const [addedAdvisors, setAddedAdvisors] = useState(() => loadOverrides(addedStorageKey));
   const [profiles, setProfiles] = useState(() => loadOverrides(profilesStorageKey));
   const [notesList, setNotesList] = useState(() => {
     try {
@@ -325,6 +331,13 @@ function DeptMap({ config, isAdmin }) {
       return unsubscribe;
     }
   }, [deletedFirebasePath]);
+
+  useEffect(() => {
+    if (firebaseEnabled) {
+      const unsubscribe = subscribeToOverrides(addedFirebasePath, (shared) => setAddedAdvisors(shared));
+      return unsubscribe;
+    }
+  }, [addedFirebasePath]);
 
   // one-time backfill: copy each advisor's original product tags into their
   // profile, since the profile used to be a separate, empty data store
@@ -414,10 +427,14 @@ function DeptMap({ config, isAdmin }) {
     return { ...advisorTagsBase, ...tagOverrides };
   }, [advisorTagsBase, tagOverrides]);
 
-  const advisorNames = useMemo(
-    () => Object.keys(advisorPostcodes).filter((n) => !deletedAdvisors[n]).sort((a, b) => a.localeCompare(b)),
-    [advisorPostcodes, deletedAdvisors]
-  );
+  const advisorNames = useMemo(() => {
+    // union with addedAdvisors: a brand-new advisor with zero postcodes has
+    // nothing to actually store in advisorPostcodes (Firebase can't persist
+    // an empty array, so that key just wouldn't survive a refresh) -- their
+    // existence is tracked here instead, independent of their postcode list
+    const names = new Set([...Object.keys(advisorPostcodes), ...Object.keys(addedAdvisors)]);
+    return Array.from(names).filter((n) => !deletedAdvisors[n]).sort((a, b) => a.localeCompare(b));
+  }, [advisorPostcodes, addedAdvisors, deletedAdvisors]);
 
   useEffect(() => {
     fetch(postcodesUrl)
@@ -724,12 +741,12 @@ function DeptMap({ config, isAdmin }) {
         saveOverridesLocal(deletedStorageKey, nextDeleted);
       }
     } else {
-      const nextOverrides = { ...overrides, [trimmed]: [] };
-      setOverrides(nextOverrides);
+      const nextAdded = { ...addedAdvisors, [trimmed]: true };
+      setAddedAdvisors(nextAdded);
       if (firebaseEnabled) {
-        saveOverridesShared(firebasePath, nextOverrides);
+        saveOverridesShared(addedFirebasePath, nextAdded);
       } else {
-        saveOverridesLocal(storageKey, nextOverrides);
+        saveOverridesLocal(addedStorageKey, nextAdded);
       }
     }
     setNewAdvisorName("");
@@ -882,13 +899,16 @@ function DeptMap({ config, isAdmin }) {
     localStorage.removeItem(storageKey);
     localStorage.removeItem(tagsStorageKey);
     localStorage.removeItem(deletedStorageKey);
+    localStorage.removeItem(addedStorageKey);
     setOverrides({});
     setTagOverrides({});
     setDeletedAdvisors({});
+    setAddedAdvisors({});
     if (firebaseEnabled) {
       saveOverridesShared(firebasePath, {});
       saveOverridesShared(tagsFirebasePath, {});
       saveOverridesShared(deletedFirebasePath, {});
+      saveOverridesShared(addedFirebasePath, {});
     }
     setSelected(null);
     setDraft("");
