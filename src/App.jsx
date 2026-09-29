@@ -677,7 +677,7 @@ function DeptMap({ config, isAdmin }) {
       return;
     }
     const renaming = newName !== oldName;
-    if (renaming && (advisorNames.includes(newName) || deletedAdvisors[newName])) {
+    if (renaming && advisorNames.includes(newName)) {
       setPanelNameError("Deze naam bestaat al");
       return;
     }
@@ -726,8 +726,11 @@ function DeptMap({ config, isAdmin }) {
       }
 
       // hide the old name and make sure the new one is tracked, regardless
-      // of whether oldName came from the bundled data or was added in-app
+      // of whether oldName came from the bundled data or was added in-app --
+      // and un-hide newName in case it was itself a previously-retired name
+      // (e.g. renaming back to what this advisor used to be called)
       const nextDeleted = { ...deletedAdvisors, [oldName]: true };
+      delete nextDeleted[newName];
       setDeletedAdvisors(nextDeleted);
       if (firebaseEnabled) {
         saveOverridesShared(deletedFirebasePath, nextDeleted);
