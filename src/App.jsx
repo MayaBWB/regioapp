@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { MapContainer, TileLayer, GeoJSON, CircleMarker, Marker, Tooltip, ZoomControl, Pane, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -289,30 +289,23 @@ function DeptMap({ config, isAdmin }) {
   const [activeSearch, setActiveSearch] = useState([]);
   const [searchError, setSearchError] = useState("");
   const [panelAdvisor, setPanelAdvisor] = useState(null);
-  const [panelTop, setPanelTop] = useState(80);
-  const [panelLeft, setPanelLeft] = useState(276);
-  const [panelPcDraft, setPanelPcDraft] = useState("");
   const [panelTags, setPanelTags] = useState([]);
   const [panelSaved, setPanelSaved] = useState(false);
   const [panelNameDraft, setPanelNameDraft] = useState("");
   const [panelNameError, setPanelNameError] = useState("");
   const [panelHomeDraft, setPanelHomeDraft] = useState("");
+  const [profileDraft, setProfileDraft] = useState(null);
   const [notesPanelOpen, setNotesPanelOpen] = useState(false);
   const [noteDraftPostcode, setNoteDraftPostcode] = useState("");
   const [noteDraftName, setNoteDraftName] = useState("");
   const [noteDraftDate, setNoteDraftDate] = useState("");
   const [noteError, setNoteError] = useState("");
-  const [profileViewName, setProfileViewName] = useState(null);
-  const [profileDraft, setProfileDraft] = useState(null);
-  const [profileSaved, setProfileSaved] = useState(false);
-  const [profileHomeDraft, setProfileHomeDraft] = useState("");
   const [newAdvisorName, setNewAdvisorName] = useState("");
   const [addAdvisorError, setAddAdvisorError] = useState("");
   const [toast, setToast] = useState("");
   const mapRef = useRef(null);
   const canvasRenderer = useMemo(() => L.canvas(), []);
   const advisorLayerRef = useRef(null);
-  const panelRef = useRef(null);
   const notesSeededRef = useRef(false);
   const toastTimeoutRef = useRef(null);
   const productsMigratedRef = useRef(false);
@@ -421,18 +414,11 @@ function DeptMap({ config, isAdmin }) {
 
   useEffect(() => {
     if (!panelAdvisor) return;
-    const onKeyDown = (e) => { if (e.key === "Escape") setPanelAdvisor(null); };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [panelAdvisor]);
-
-  useEffect(() => {
-    if (!profileViewName) return;
-    const onKeyDown = (e) => { if (e.key === "Escape") closeProfile(); };
+    const onKeyDown = (e) => { if (e.key === "Escape") closeAdvisorPanel(); };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profileViewName]);
+  }, [panelAdvisor]);
 
   const advisorPostcodes = useMemo(() => {
     return { ...advisorPostcodesBase, ...overrides };
@@ -594,41 +580,24 @@ function DeptMap({ config, isAdmin }) {
     setSaved(false);
   }
 
-  function clampPanelLeft(left, width) {
-    const margin = 12;
-    const panelWidth = Math.min(width ?? 280, window.innerWidth - margin * 2);
-    const maxLeft = Math.max(margin, window.innerWidth - panelWidth - margin);
-    return Math.min(Math.max(margin, left), maxLeft);
-  }
-
-  function clampPanelTop(top, height) {
-    const margin = 12;
-    // rough guess for the very first frame, before the panel is measured
-    const estHeight = height ?? (150 + (tagDefs?.length || 0) * 30 + 140);
-    const maxTop = Math.max(margin, window.innerHeight - Math.min(estHeight, window.innerHeight - margin * 2) - margin);
-    return Math.min(Math.max(margin, top), maxTop);
-  }
-
-  function openPanel(name, e) {
+  function openAdvisorPanel(name) {
     if (!isAdmin) return;
-    const clickY = e?.clientY ?? 100;
-    setPanelLeft(clampPanelLeft(276));
-    setPanelTop(clampPanelTop(clickY - 40));
     setPanelAdvisor(name);
-    setPanelPcDraft((advisorPostcodes[name] || []).join(", "));
     setPanelTags(advisorTags[name] || []);
     setPanelSaved(false);
     setPanelNameDraft(name);
     setPanelNameError("");
     setPanelHomeDraft(advisorHomePostcode[name] || "");
+    setProfileDraft({ ...emptyProfile(), ...(profiles[name] || {}) });
     // keep the map highlight in sync so the admin can see what they're editing
     setSelected(name);
     setDraft((advisorPostcodes[name] || []).join(", "));
     setSaved(false);
   }
 
-  function closePanel() {
+  function closeAdvisorPanel() {
     setPanelAdvisor(null);
+    setProfileDraft(null);
   }
 
   function togglePanelTag(id) {
@@ -649,7 +618,6 @@ function DeptMap({ config, isAdmin }) {
     }
 
     setDraft(nextList.join(", "));
-    if (panelAdvisor === selected) setPanelPcDraft(nextList.join(", "));
     showToast(has ? "Postcode verwijderd" : "Postcode toegevoegd");
   }
 
@@ -692,7 +660,7 @@ function DeptMap({ config, isAdmin }) {
     popup.openOn(mapRef.current);
   };
 
-  function savePanel() {
+  function saveAdvisorPanel() {
     if (!isAdmin || !panelAdvisor) return;
     const oldName = panelAdvisor;
     const newName = panelNameDraft.trim();
@@ -707,25 +675,24 @@ function DeptMap({ config, isAdmin }) {
     }
     setPanelNameError("");
 
-    const list = panelPcDraft
-      .split(",")
-      .map((s) => s.trim())
-      .filter((s) => /^\d{4}$/.test(s));
-    const uniquePcs = Array.from(new Set(list)).sort();
-
-    const nextOverrides = { ...overrides };
-    delete nextOverrides[oldName];
-    nextOverrides[newName] = uniquePcs;
-    setOverrides(nextOverrides);
-    if (firebaseEnabled) {
-      saveOverridesShared(firebasePath, nextOverrides);
-    } else {
-      saveOverridesLocal(storageKey, nextOverrides);
+    if (renaming) {
+      // postcodes aren't edited here anymore (map click handles that), but
+      // the current list still needs to move over to the new name
+      const currentPcs = advisorPostcodes[oldName] || [];
+      const nextOverrides = { ...overrides };
+      delete nextOverrides[oldName];
+      nextOverrides[newName] = currentPcs;
+      setOverrides(nextOverrides);
+      if (firebaseEnabled) {
+        saveOverridesShared(firebasePath, nextOverrides);
+      } else {
+        saveOverridesLocal(storageKey, nextOverrides);
+      }
     }
 
     if (tagDefs && tagDefs.length) {
       const nextTagOverrides = { ...tagOverrides };
-      delete nextTagOverrides[oldName];
+      if (renaming) delete nextTagOverrides[oldName];
       nextTagOverrides[newName] = panelTags;
       setTagOverrides(nextTagOverrides);
       if (firebaseEnabled) {
@@ -735,13 +702,13 @@ function DeptMap({ config, isAdmin }) {
       }
     }
 
-    // home postcode -- shared with the profile editor, so either place can
+    // home postcode -- shared between both editors, so either place can
     // set it and both stay in sync
     const homePc = panelHomeDraft.trim();
     const homeValid = !homePc || (/^\d{4}$/.test(homePc) && availablePostcodes.has(homePc));
     if (homeValid) {
       const nextHome = { ...homeOverrides };
-      delete nextHome[oldName];
+      if (renaming) delete nextHome[oldName];
       if (homePc) {
         nextHome[newName] = homePc;
       } else {
@@ -755,20 +722,19 @@ function DeptMap({ config, isAdmin }) {
       }
     }
 
-    if (renaming) {
-      // move the profile over too, since it's also keyed by name
-      if (profiles[oldName]) {
-        const nextProfiles = { ...profiles };
-        delete nextProfiles[oldName];
-        nextProfiles[newName] = profiles[oldName];
-        setProfiles(nextProfiles);
-        if (firebaseEnabled) {
-          saveOverridesShared(profilesFirebasePath, nextProfiles);
-        } else {
-          saveOverridesLocal(profilesStorageKey, nextProfiles);
-        }
+    if (profileDraft) {
+      const nextProfiles = { ...profiles };
+      if (renaming) delete nextProfiles[oldName];
+      nextProfiles[newName] = profileDraft;
+      setProfiles(nextProfiles);
+      if (firebaseEnabled) {
+        saveOverridesShared(profilesFirebasePath, nextProfiles);
+      } else {
+        saveOverridesLocal(profilesStorageKey, nextProfiles);
       }
+    }
 
+    if (renaming) {
       // hide the old name and make sure the new one is tracked, regardless
       // of whether oldName came from the bundled data or was added in-app --
       // and un-hide newName in case it was itself a previously-retired name
@@ -792,9 +758,9 @@ function DeptMap({ config, isAdmin }) {
 
       setPanelAdvisor(newName);
       if (selected === oldName) setSelected(newName);
+      if (selected === oldName) setDraft((advisorPostcodes[oldName] || []).join(", "));
     }
 
-    if (selected === oldName || selected === newName) setDraft(uniquePcs.join(", "));
     setPanelSaved(true);
     setTimeout(() => setPanelSaved(false), 1500);
     showToast(renaming ? "Naam gewijzigd" : "Wijzigingen opgeslagen");
@@ -818,6 +784,7 @@ function DeptMap({ config, isAdmin }) {
       setDraft("");
     }
     setPanelAdvisor(null);
+    setProfileDraft(null);
     showToast("Adviseur verwijderd");
   }
 
@@ -858,20 +825,6 @@ function DeptMap({ config, isAdmin }) {
     showToast("Adviseur toegevoegd");
   }
 
-  function openProfile(name) {
-    setProfileViewName(name);
-    setProfileSaved(false);
-    if (isAdmin) {
-      setProfileDraft({ ...emptyProfile(), ...(profiles[name] || {}) });
-      setProfileHomeDraft(advisorHomePostcode[name] || "");
-    }
-  }
-
-  function closeProfile() {
-    setProfileViewName(null);
-    setProfileDraft(null);
-  }
-
   function updateProfileField(field, value) {
     setProfileDraft((prev) => ({ ...prev, [field]: value }));
   }
@@ -884,39 +837,6 @@ function DeptMap({ config, isAdmin }) {
         [field]: list.includes(value) ? list.filter((v) => v !== value) : [...list, value],
       };
     });
-  }
-
-  function saveProfile() {
-    if (!isAdmin || !profileViewName || !profileDraft) return;
-    const next = { ...profiles, [profileViewName]: profileDraft };
-    setProfiles(next);
-    if (firebaseEnabled) {
-      saveOverridesShared(profilesFirebasePath, next);
-    } else {
-      saveOverridesLocal(profilesStorageKey, next);
-    }
-
-    // home postcode -- shared with the normal edit popup, so either place
-    // can set it and both stay in sync
-    const homePc = profileHomeDraft.trim();
-    if (!homePc || (/^\d{4}$/.test(homePc) && availablePostcodes.has(homePc))) {
-      const nextHome = { ...homeOverrides };
-      if (homePc) {
-        nextHome[profileViewName] = homePc;
-      } else {
-        delete nextHome[profileViewName];
-      }
-      setHomeOverrides(nextHome);
-      if (firebaseEnabled) {
-        saveOverridesShared(homeFirebasePath, nextHome);
-      } else {
-        saveOverridesLocal(homeStorageKey, nextHome);
-      }
-    }
-
-    setProfileSaved(true);
-    setTimeout(() => setProfileSaved(false), 1500);
-    showToast("Profiel opgeslagen");
   }
 
   function pruneExpiredNotes(list) {
@@ -969,36 +889,9 @@ function DeptMap({ config, isAdmin }) {
     showToast("Notitie verwijderd");
   }
 
-  const panelUnknown = panelPcDraft
-    .split(",")
-    .map((s) => s.trim())
-    .filter((s) => s && (!/^\d{4}$/.test(s) || !availablePostcodes.has(s)));
-
   const panelHomeInvalid = Boolean(
     panelHomeDraft.trim() && !(/^\d{4}$/.test(panelHomeDraft.trim()) && availablePostcodes.has(panelHomeDraft.trim()))
   );
-
-  function reclampPanelToContent() {
-    if (!panelRef.current) return;
-    const rect = panelRef.current.getBoundingClientRect();
-    setPanelTop((t) => clampPanelTop(t, rect.height));
-    setPanelLeft((l) => clampPanelLeft(l, rect.width));
-  }
-
-  // measure the panel's real rendered size and re-clamp -- a hardcoded
-  // height estimate drifts out of sync whenever the panel's content changes
-  useLayoutEffect(() => {
-    if (!panelAdvisor) return;
-    reclampPanelToContent();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [panelAdvisor, panelPcDraft, panelUnknown.length]);
-
-  useEffect(() => {
-    if (!panelAdvisor) return;
-    window.addEventListener("resize", reclampPanelToContent);
-    return () => window.removeEventListener("resize", reclampPanelToContent);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [panelAdvisor]);
 
   function handleSave() {
     if (!isAdmin) return;
@@ -1173,7 +1066,7 @@ function DeptMap({ config, isAdmin }) {
                       : {}
                   }
                   onClick={() => selectAdvisor(name)}
-                  onDoubleClick={isAdmin ? (e) => openPanel(name, e) : undefined}
+                  onDoubleClick={isAdmin ? () => openAdvisorPanel(name) : undefined}
                   title={isAdmin ? "Dubbelklik om te bewerken" : undefined}
                 >
                   <span className="advisor-row-top">
@@ -1193,7 +1086,7 @@ function DeptMap({ config, isAdmin }) {
                 </button>
                 <button
                   className="profile-btn"
-                  onClick={() => openProfile(name)}
+                  onClick={() => (isAdmin ? openAdvisorPanel(name) : setPanelAdvisor(name))}
                   title="Profiel bekijken"
                   aria-label={`Profiel van ${name}`}
                 >
@@ -1357,64 +1250,6 @@ function DeptMap({ config, isAdmin }) {
         </MapContainer>
       </main>
 
-      {isAdmin && panelAdvisor && (
-        <>
-          <div className="advisor-panel-backdrop" onClick={closePanel} />
-          <div className="advisor-panel" ref={panelRef} style={{ top: panelTop, left: panelLeft }}>
-            <div className="advisor-panel-header">
-              <input
-                type="text"
-                className="advisor-panel-name-input"
-                value={panelNameDraft}
-                onChange={(e) => { setPanelNameDraft(e.target.value); setPanelNameError(""); }}
-              />
-              <button className="advisor-panel-close" onClick={closePanel} aria-label="Sluiten">×</button>
-            </div>
-            {panelNameError && <p className="warning">{panelNameError}</p>}
-            <p className="hint">Postcodes, gescheiden door komma</p>
-            <p className="hint">Of klik een postcode op de kaart om toe te voegen/verwijderen</p>
-            <textarea rows={5} value={panelPcDraft} onChange={(e) => setPanelPcDraft(e.target.value)} />
-            {panelUnknown.length > 0 && (
-              <p className="warning">Onbekend of ongeldig: {panelUnknown.join(", ")}</p>
-            )}
-            <p className="hint">Thuisbasis (postcode)</p>
-            <input
-              type="text"
-              className="advisor-panel-home-input"
-              placeholder="Postcode"
-              value={panelHomeDraft}
-              onChange={(e) => setPanelHomeDraft(e.target.value)}
-            />
-            {panelHomeInvalid && <p className="warning">Onbekende postcode</p>}
-            {tagDefs.some((td) => td.bold) && (
-              <div className="advisor-panel-tags">
-                <p className="hint">Prioriteit</p>
-                {tagDefs.filter((td) => td.bold).map((td) => (
-                  <label key={td.id} className="advisor-panel-tag">
-                    <input
-                      type="checkbox"
-                      checked={panelTags.includes(td.id)}
-                      onChange={() => togglePanelTag(td.id)}
-                    />
-                    <span>{td.emoji} {td.label}</span>
-                  </label>
-                ))}
-                <p className="hint">Producten aanpassen kan via het profiel (👤)</p>
-              </div>
-            )}
-            <div className="editor-actions">
-              <button className="save-btn" onClick={savePanel}>
-                {panelSaved ? "Opgeslagen ✓" : "Opslaan"}
-              </button>
-              <button className="panel-close-btn" onClick={closePanel}>Sluiten</button>
-            </div>
-            <div className="advisor-panel-danger">
-              <button className="delete-btn" onClick={deleteAdvisor}>Verwijder</button>
-            </div>
-          </div>
-        </>
-      )}
-
       {isAdmin && notesPanelOpen && (
         <>
           <div className="advisor-panel-backdrop" onClick={() => setNotesPanelOpen(false)} />
@@ -1462,20 +1297,68 @@ function DeptMap({ config, isAdmin }) {
         </>
       )}
 
-      {profileViewName && (() => {
-        const viewProfile = profiles[profileViewName] || emptyProfile();
+      {panelAdvisor && (() => {
+        const viewProfile = profiles[panelAdvisor] || emptyProfile();
         return (
           <>
-            <div className="advisor-panel-backdrop" onClick={closeProfile} />
-            <div className="advisor-panel profile-panel">
+            <div className="advisor-panel-backdrop" onClick={closeAdvisorPanel} />
+            <div className="advisor-panel">
               <div className="advisor-panel-header">
-                <h2>{profileViewName}</h2>
-                <button className="advisor-panel-close" onClick={closeProfile} aria-label="Sluiten">×</button>
+                {isAdmin ? (
+                  <input
+                    type="text"
+                    className="advisor-panel-name-input"
+                    value={panelNameDraft}
+                    onChange={(e) => { setPanelNameDraft(e.target.value); setPanelNameError(""); }}
+                  />
+                ) : (
+                  <h2>{panelAdvisor}</h2>
+                )}
+                <button className="advisor-panel-close" onClick={closeAdvisorPanel} aria-label="Sluiten">×</button>
               </div>
+              {panelNameError && <p className="warning">{panelNameError}</p>}
 
               {isAdmin && profileDraft ? (
                 <>
                   <div className="profile-photo"><ProfileAvatar gender={profileDraft.gender} /></div>
+
+                  <div className="profile-section">
+                    <p className="hint">Postcodes</p>
+                    <p>{(advisorPostcodes[panelAdvisor] || []).join(", ") || "Nog geen postcodes"}</p>
+                    <p className="hint">Klik een postcode op de kaart om toe te voegen/verwijderen</p>
+                  </div>
+
+                  <div className="profile-section">
+                    <p className="hint">Thuisbasis (postcode)</p>
+                    <input
+                      type="text"
+                      className="advisor-panel-home-input"
+                      placeholder="Postcode"
+                      value={panelHomeDraft}
+                      onChange={(e) => setPanelHomeDraft(e.target.value)}
+                    />
+                    {panelHomeDraft.trim() && postcodeNames[panelHomeDraft.trim()] && (
+                      <p className="hint">{postcodeNames[panelHomeDraft.trim()]}</p>
+                    )}
+                    {panelHomeInvalid && <p className="warning">Onbekende postcode</p>}
+                  </div>
+
+                  {tagDefs.some((td) => td.bold) && (
+                    <div className="profile-section">
+                      <p className="hint">Prioriteit</p>
+                      {tagDefs.filter((td) => td.bold).map((td) => (
+                        <label key={td.id} className="profile-checkbox-row">
+                          <input
+                            type="checkbox"
+                            checked={panelTags.includes(td.id)}
+                            onChange={() => togglePanelTag(td.id)}
+                          />
+                          <span>{td.emoji} {td.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+
                   <div className="profile-section">
                     <p className="hint">Profielfoto</p>
                     <div className="profile-radio-row">
@@ -1494,16 +1377,18 @@ function DeptMap({ config, isAdmin }) {
 
                   <div className="profile-section">
                     <p className="hint">Welke producten</p>
-                    {PRODUCT_DEFS.map((p) => (
-                      <label key={p.id} className="profile-checkbox-row">
-                        <input
-                          type="checkbox"
-                          checked={profileDraft.products.includes(p.id)}
-                          onChange={() => toggleProfileListField("products", p.id)}
-                        />
-                        <span>{p.emoji} {p.label}</span>
-                      </label>
-                    ))}
+                    <div className="profile-checkbox-grid">
+                      {PRODUCT_DEFS.map((p) => (
+                        <label key={p.id} className="profile-checkbox-row">
+                          <input
+                            type="checkbox"
+                            checked={profileDraft.products.includes(p.id)}
+                            onChange={() => toggleProfileListField("products", p.id)}
+                          />
+                          <span>{p.emoji} {p.label}</span>
+                        </label>
+                      ))}
+                    </div>
                   </div>
 
                   <div className="profile-section">
@@ -1517,16 +1402,18 @@ function DeptMap({ config, isAdmin }) {
 
                   <div className="profile-section">
                     <p className="hint">Welke talen</p>
-                    {LANGUAGE_DEFS.map((lang) => (
-                      <label key={lang} className="profile-checkbox-row">
-                        <input
-                          type="checkbox"
-                          checked={profileDraft.languages.includes(lang)}
-                          onChange={() => toggleProfileListField("languages", lang)}
-                        />
-                        <span>{lang}</span>
-                      </label>
-                    ))}
+                    <div className="profile-radio-row">
+                      {LANGUAGE_DEFS.map((lang) => (
+                        <label key={lang} className="profile-checkbox-row">
+                          <input
+                            type="checkbox"
+                            checked={profileDraft.languages.includes(lang)}
+                            onChange={() => toggleProfileListField("languages", lang)}
+                          />
+                          <span>{lang}</span>
+                        </label>
+                      ))}
+                    </div>
                     <input
                       type="text"
                       placeholder="Andere taal, vrij in te voeren"
@@ -1541,22 +1428,6 @@ function DeptMap({ config, isAdmin }) {
                       <label><input type="radio" name="thuisbatterijEnkel" checked={profileDraft.thuisbatterijEnkel === "ja"} onChange={() => updateProfileField("thuisbatterijEnkel", "ja")} /> 👍 Ja!</label>
                       <label><input type="radio" name="thuisbatterijEnkel" checked={profileDraft.thuisbatterijEnkel === "nee"} onChange={() => updateProfileField("thuisbatterijEnkel", "nee")} /> 👎 Nee!</label>
                     </div>
-                  </div>
-
-                  <div className="profile-section">
-                    <p className="hint">Thuisbasis (postcode)</p>
-                    <input
-                      type="text"
-                      placeholder="Postcode"
-                      value={profileHomeDraft}
-                      onChange={(e) => setProfileHomeDraft(e.target.value)}
-                    />
-                    {profileHomeDraft.trim() && postcodeNames[profileHomeDraft.trim()] && (
-                      <p className="hint">{postcodeNames[profileHomeDraft.trim()]}</p>
-                    )}
-                    {profileHomeDraft.trim() && !availablePostcodes.has(profileHomeDraft.trim()) && (
-                      <p className="warning">Onbekende postcode</p>
-                    )}
                   </div>
 
                   <div className="profile-section">
@@ -1576,10 +1447,13 @@ function DeptMap({ config, isAdmin }) {
                   </div>
 
                   <div className="editor-actions">
-                    <button className="save-btn" onClick={saveProfile}>
-                      {profileSaved ? "Opgeslagen ✓" : "Opslaan"}
+                    <button className="save-btn" onClick={saveAdvisorPanel}>
+                      {panelSaved ? "Opgeslagen ✓" : "Opslaan"}
                     </button>
-                    <button className="panel-close-btn" onClick={closeProfile}>Sluiten</button>
+                    <button className="panel-close-btn" onClick={closeAdvisorPanel}>Sluiten</button>
+                  </div>
+                  <div className="advisor-panel-danger">
+                    <button className="delete-btn" onClick={deleteAdvisor}>Verwijder</button>
                   </div>
                 </>
               ) : (
@@ -1623,8 +1497,8 @@ function DeptMap({ config, isAdmin }) {
                   <div className="profile-section">
                     <p className="hint">Thuisbasis</p>
                     <p>
-                      {advisorHomePostcode[profileViewName]
-                        ? `${advisorHomePostcode[profileViewName]} · ${postcodeNames[advisorHomePostcode[profileViewName]] || ""}`
+                      {advisorHomePostcode[panelAdvisor]
+                        ? `${advisorHomePostcode[panelAdvisor]} · ${postcodeNames[advisorHomePostcode[panelAdvisor]] || ""}`
                         : "Nog niet ingevuld"}
                     </p>
                   </div>
@@ -1640,7 +1514,7 @@ function DeptMap({ config, isAdmin }) {
                   </div>
 
                   <div className="editor-actions">
-                    <button className="panel-close-btn" onClick={closeProfile}>Sluiten</button>
+                    <button className="panel-close-btn" onClick={closeAdvisorPanel}>Sluiten</button>
                   </div>
                 </>
               )}

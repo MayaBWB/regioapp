@@ -628,15 +628,18 @@ html, body, #root { height: 100%; margin: 0; }
 
 .advisor-panel {
   position: fixed;
-  width: 280px;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 480px;
   max-width: calc(100vw - 24px);
-  max-height: calc(100vh - 24px);
+  max-height: calc(100vh - 40px);
   overflow-y: auto;
   background: #fff;
   border: 1px solid #ddd;
   border-radius: 10px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
-  padding: 16px;
+  padding: 16px 20px;
   z-index: 1999;
 }
 
@@ -706,23 +709,6 @@ html, body, #root { height: 100%; margin: 0; }
   border: 1px solid #ccc;
   border-radius: 6px;
   margin-top: 6px;
-}
-
-.advisor-panel-tags {
-  margin-top: 14px;
-  padding-top: 10px;
-  border-top: 1px solid #eee;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.advisor-panel-tag {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  cursor: pointer;
 }
 
 .panel-close-btn {
@@ -821,14 +807,6 @@ html, body, #root { height: 100%; margin: 0; }
   color: #fff;
 }
 
-.profile-panel {
-  position: fixed;
-  top: 40px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 360px;
-}
-
 .profile-photo {
   display: flex;
   justify-content: center;
@@ -897,6 +875,12 @@ html, body, #root { height: 100%; margin: 0; }
   font-size: 13px;
   padding: 2px 0;
   cursor: pointer;
+}
+
+.profile-checkbox-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 12px;
 }
 
 .profile-chip-row {
