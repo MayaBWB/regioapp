@@ -1323,12 +1323,6 @@ function DeptMap({ config, isAdmin }) {
                   <div className="profile-photo"><ProfileAvatar gender={profileDraft.gender} /></div>
 
                   <div className="profile-section">
-                    <p className="hint">Postcodes</p>
-                    <p>{(advisorPostcodes[panelAdvisor] || []).join(", ") || "Nog geen postcodes"}</p>
-                    <p className="hint">Klik een postcode op de kaart om toe te voegen/verwijderen</p>
-                  </div>
-
-                  <div className="profile-section">
                     <p className="hint">Thuisbasis (postcode)</p>
                     <input
                       type="text"
