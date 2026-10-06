@@ -11,7 +11,7 @@ html, body, #root { height: 100%; margin: 0; }
 .dept-tabs {
   display: flex;
   gap: 2px;
-  background: #ffd84d;
+  background: #e5e5e0;
   padding: 6px 6px 0;
   flex-shrink: 0;
 }
