@@ -44,6 +44,7 @@ const PRODUCT_DEFS = [
   { id: "thuisbatterij", emoji: "🔋", label: "Thuisbatterij" },
   { id: "wplw", emoji: "🔥", label: "Lucht-Water warmtepomp" },
   { id: "wpb", emoji: "💧", label: "Warmtepompboiler" },
+  { id: "infraroodpanelen", emoji: "🌡️", label: "Infraroodpanelen" },
 ];
 
 const LANGUAGE_DEFS = ["FR", "NL", "ENG"];
