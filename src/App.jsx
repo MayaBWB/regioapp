@@ -100,6 +100,8 @@ const DEPARTMENTS = [
     addedFirebasePath: "advisorAddedOverrides",
     homeStorageKey: "advisor-home-overrides",
     homeFirebasePath: "advisorHomeOverrides",
+    pausedStorageKey: "advisor-paused-overrides",
+    pausedFirebasePath: "advisorPausedOverrides",
     profilesStorageKey: "advisor-profiles",
     profilesFirebasePath: "advisorProfiles",
   },
@@ -127,6 +129,8 @@ const DEPARTMENTS = [
     addedFirebasePath: "advisorAddedOverridesAlkmaar",
     homeStorageKey: "advisor-home-overrides-alkmaar",
     homeFirebasePath: "advisorHomeOverridesAlkmaar",
+    pausedStorageKey: "advisor-paused-overrides-alkmaar",
+    pausedFirebasePath: "advisorPausedOverridesAlkmaar",
     profilesStorageKey: "advisor-profiles-alkmaar",
     profilesFirebasePath: "advisorProfilesAlkmaar",
   },
@@ -262,6 +266,7 @@ function DeptMap({ config, isAdmin }) {
     deletedStorageKey, deletedFirebasePath,
     addedStorageKey, addedFirebasePath,
     homeStorageKey, homeFirebasePath,
+    pausedStorageKey, pausedFirebasePath,
     profilesStorageKey, profilesFirebasePath,
   } = config;
 
@@ -272,6 +277,7 @@ function DeptMap({ config, isAdmin }) {
   const [deletedAdvisors, setDeletedAdvisors] = useState(() => loadOverrides(deletedStorageKey));
   const [addedAdvisors, setAddedAdvisors] = useState(() => loadOverrides(addedStorageKey));
   const [homeOverrides, setHomeOverrides] = useState(() => loadOverrides(homeStorageKey));
+  const [pausedAdvisors, setPausedAdvisors] = useState(() => loadOverrides(pausedStorageKey));
   const [profiles, setProfiles] = useState(() => loadOverrides(profilesStorageKey));
   const [notesList, setNotesList] = useState(() => {
     try {
@@ -347,6 +353,13 @@ function DeptMap({ config, isAdmin }) {
       return unsubscribe;
     }
   }, [homeFirebasePath]);
+
+  useEffect(() => {
+    if (firebaseEnabled) {
+      const unsubscribe = subscribeToOverrides(pausedFirebasePath, (shared) => setPausedAdvisors(shared));
+      return unsubscribe;
+    }
+  }, [pausedFirebasePath]);
 
   // one-time backfill: copy each advisor's original product tags into their
   // profile, since the profile used to be a separate, empty data store
@@ -547,6 +560,8 @@ function DeptMap({ config, isAdmin }) {
 
   // one combined style fn/layer instead of a separate advisor-highlight layer
   // and search-highlight layer stacked on top of the same 1000+ polygons
+  const isSelectedPaused = Boolean(selected && pausedAdvisors[selected]);
+
   const styleFn = (feature) => {
     const pc = feature.properties.postcode;
     const hit = searchByPostcode.get(pc);
@@ -555,6 +570,9 @@ function DeptMap({ config, isAdmin }) {
     }
     const isActive = selectedPostcodeSet && selectedPostcodeSet.has(pc);
     if (isActive) {
+      if (isSelectedPaused) {
+        return { fillColor: "#999", fillOpacity: 0.25, color: "#777", weight: 1.5, dashArray: "6 4" };
+      }
       return { fillColor: highlightColor, fillOpacity: 0.4, color: highlightColor, weight: 1.5 };
     }
     return { fillColor: "#888", fillOpacity: 0, color: "#999", weight: 0.3 };
@@ -563,7 +581,7 @@ function DeptMap({ config, isAdmin }) {
   useEffect(() => {
     if (advisorLayerRef.current) advisorLayerRef.current.setStyle(styleFn);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPostcodeSet, highlightColor, searchByPostcode]);
+  }, [selectedPostcodeSet, highlightColor, searchByPostcode, isSelectedPaused]);
 
   function showToast(message) {
     setToast(message);
@@ -789,6 +807,24 @@ function DeptMap({ config, isAdmin }) {
     showToast("Adviseur verwijderd");
   }
 
+  function togglePauseAdvisor() {
+    if (!isAdmin || !panelAdvisor) return;
+    const nextPaused = { ...pausedAdvisors };
+    const nowPaused = !nextPaused[panelAdvisor];
+    if (nowPaused) {
+      nextPaused[panelAdvisor] = true;
+    } else {
+      delete nextPaused[panelAdvisor];
+    }
+    setPausedAdvisors(nextPaused);
+    if (firebaseEnabled) {
+      saveOverridesShared(pausedFirebasePath, nextPaused);
+    } else {
+      saveOverridesLocal(pausedStorageKey, nextPaused);
+    }
+    showToast(nowPaused ? "Adviseur gepauzeerd" : "Adviseur hervat");
+  }
+
   function addAdvisor(e) {
     e.preventDefault();
     if (!isAdmin) return;
@@ -924,17 +960,20 @@ function DeptMap({ config, isAdmin }) {
     localStorage.removeItem(deletedStorageKey);
     localStorage.removeItem(addedStorageKey);
     localStorage.removeItem(homeStorageKey);
+    localStorage.removeItem(pausedStorageKey);
     setOverrides({});
     setTagOverrides({});
     setDeletedAdvisors({});
     setAddedAdvisors({});
     setHomeOverrides({});
+    setPausedAdvisors({});
     if (firebaseEnabled) {
       saveOverridesShared(firebasePath, {});
       saveOverridesShared(tagsFirebasePath, {});
       saveOverridesShared(deletedFirebasePath, {});
       saveOverridesShared(addedFirebasePath, {});
       saveOverridesShared(homeFirebasePath, {});
+      saveOverridesShared(pausedFirebasePath, {});
     }
     setSelected(null);
     setDraft("");
@@ -1074,6 +1113,7 @@ function DeptMap({ config, isAdmin }) {
                     <span className="dot" style={{ background: colorForIndex(i) }} />
                     <span style={isPrio ? { fontWeight: 700, background: "#FFD70055", padding: "1px 5px", borderRadius: "4px" } : {}}>{name}</span>
                     {isPrio && <span title={prioLabel}>{prioEmoji}</span>}
+                    {pausedAdvisors[name] && <span title="Gepauzeerd">⏸️</span>}
                     {advisorHomePostcode[name] && (
                       <span className="home-pc">{advisorHomePostcode[name]}</span>
                     )}
@@ -1446,6 +1486,12 @@ function DeptMap({ config, isAdmin }) {
                       {panelSaved ? "Opgeslagen ✓" : "Opslaan"}
                     </button>
                     <button className="panel-close-btn" onClick={closeAdvisorPanel}>Sluiten</button>
+                  </div>
+                  <div className="advisor-panel-pause">
+                    <button className="pause-btn" onClick={togglePauseAdvisor}>
+                      {pausedAdvisors[panelAdvisor] ? "▶️ Hervatten" : "⏸️ Pauzeren"}
+                    </button>
+                    <p className="hint">Gepauzeerd: regio wordt grijs met stippellijn als de adviseur geselecteerd is</p>
                   </div>
                   <div className="advisor-panel-danger">
                     <button className="delete-btn" onClick={deleteAdvisor}>Verwijder</button>

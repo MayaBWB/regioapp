@@ -731,6 +731,28 @@ html, body, #root { height: 100%; margin: 0; }
   border-top: 1px solid #eee;
 }
 
+.advisor-panel-pause {
+  margin-top: 10px;
+}
+
+.advisor-panel-pause .hint {
+  margin-top: 6px;
+}
+
+.pause-btn {
+  padding: 6px 14px;
+  font-size: 13px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  background: #fff;
+  color: #555;
+  cursor: pointer;
+}
+
+.pause-btn:hover {
+  background: #f0f0ec;
+}
+
 .delete-btn {
   padding: 6px 14px;
   font-size: 13px;
