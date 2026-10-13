@@ -14,6 +14,7 @@ import postcodeNames from "./data/postcode-names.json";
 import notesData from "./data/notes.json";
 import advisorTagsBase from "./data/advisor-tags.json";
 import advisorAgendaIds from "./data/advisor-agendas.json";
+import advisorFullNames from "./data/advisor-fullnames.json";
 
 import advisorPostcodesAlkmaar from "./data/advisor-postcodes-alkmaar.json";
 import advisorsHomeAlkmaar from "./data/advisors-home-alkmaar.json";
@@ -73,6 +74,12 @@ function emptyProfile() {
     extraInfo: "",
     agendaUrl: "",
   };
+}
+
+// display name with surname; the short name stays the key everywhere
+// (JSON files + Firebase overrides), so nothing has to be renamed in the data
+function fullName(name) {
+  return advisorFullNames[name] || name;
 }
 
 const BLOX_AGENDA_BASE = "https://admin.favorcool.be/#/CalendarWithFilter/";
@@ -690,7 +697,7 @@ function DeptMap({ config, isAdmin }) {
 
     const title = document.createElement("div");
     title.className = "postcode-popup-title";
-    title.textContent = `${label} · ${selected}`;
+    title.textContent = `${label} · ${fullName(selected)}`;
     container.appendChild(title);
 
     const btn = document.createElement("button");
@@ -1144,7 +1151,7 @@ function DeptMap({ config, isAdmin }) {
                 >
                   <span className="advisor-row-top">
                     <span className="dot" style={{ background: colorForIndex(i) }} />
-                    <span style={isPrio ? { fontWeight: 700, background: "#FFD70055", padding: "1px 5px", borderRadius: "4px" } : {}}>{name}</span>
+                    <span style={isPrio ? { fontWeight: 700, background: "#FFD70055", padding: "1px 5px", borderRadius: "4px" } : {}}>{fullName(name)}</span>
                     {isPrio && <span title={prioLabel}>{prioEmoji}</span>}
                     {pausedAdvisors[name] && <span title="Gepauzeerd">⏸️</span>}
                     {advisorHomePostcode[name] && (
@@ -1173,7 +1180,7 @@ function DeptMap({ config, isAdmin }) {
 
         {selected && isAdmin && (
           <div className="editor">
-            <h2>{selected}</h2>
+            <h2>{fullName(selected)}</h2>
             <p className="hint">Postcodes, gescheiden door komma</p>
             <p className="hint">Of klik een postcode op de kaart om toe te voegen/verwijderen</p>
             <textarea rows={6} value={draft} onChange={(e) => setDraft(e.target.value)} />
@@ -1224,7 +1231,7 @@ function DeptMap({ config, isAdmin }) {
                           const isPrio = tagDefs.some((td) => td.bold && (advisorTags[n] || []).includes(td.id)) || profiles[n]?.tier === "A";
                           return (
                             <span key={n} style={isPrio ? { fontWeight: 700 } : {}}>
-                              {n}<AgendaLink url={agendaUrlFor(n)} small />{idx < advisors.length - 1 ? ", " : ""}
+                              {fullName(n)}<AgendaLink url={agendaUrlFor(n)} small />{idx < advisors.length - 1 ? ", " : ""}
                             </span>
                           );
                         })
@@ -1315,7 +1322,7 @@ function DeptMap({ config, isAdmin }) {
                   eventHandlers={{ click: () => selectAdvisor(name) }}
                 >
                   <Tooltip>
-                    {name} · {postcodeNames[advisorHomePostcode[name]] || ""} ({advisorHomePostcode[name]})
+                    {fullName(name)} · {postcodeNames[advisorHomePostcode[name]] || ""} ({advisorHomePostcode[name]})
                   </Tooltip>
                 </Marker>
               );
@@ -1386,7 +1393,7 @@ function DeptMap({ config, isAdmin }) {
                     onChange={(e) => { setPanelNameDraft(e.target.value); setPanelNameError(""); }}
                   />
                 ) : (
-                  <h2>{panelAdvisor}</h2>
+                  <h2>{fullName(panelAdvisor)}</h2>
                 )}
                 <AgendaLink url={agendaUrlFor(panelAdvisor)} />
                 <button className="advisor-panel-close" onClick={closeAdvisorPanel} aria-label="Sluiten">×</button>
