@@ -13,6 +13,7 @@ import advisorsHome from "./data/advisors-home.json";
 import postcodeNames from "./data/postcode-names.json";
 import notesData from "./data/notes.json";
 import advisorTagsBase from "./data/advisor-tags.json";
+import advisorAgendaIds from "./data/advisor-agendas.json";
 
 import advisorPostcodesAlkmaar from "./data/advisor-postcodes-alkmaar.json";
 import advisorsHomeAlkmaar from "./data/advisors-home-alkmaar.json";
@@ -70,7 +71,30 @@ function emptyProfile() {
     thuisbatterijEnkel: "",
     travelRadiusMin: "",
     extraInfo: "",
+    agendaUrl: "",
   };
+}
+
+const BLOX_AGENDA_BASE = "https://admin.favorcool.be/#/CalendarWithFilter/";
+
+function AgendaLink({ url, small = false }) {
+  if (!url) return null;
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={small ? "agenda-link agenda-link-small" : "agenda-link"}
+      title="Agenda openen in Blox"
+      aria-label="Agenda openen in Blox"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <svg viewBox="0 0 24 24" width={small ? 13 : 16} height={small ? 13 : 16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+      </svg>
+    </a>
+  );
 }
 
 // elk departement is volledig apart: eigen kaartdata, eigen adviseurs, eigen
@@ -441,6 +465,15 @@ function DeptMap({ config, isAdmin }) {
   const advisorTags = useMemo(() => {
     return { ...advisorTagsBase, ...tagOverrides };
   }, [advisorTagsBase, tagOverrides]);
+
+  // link from the profile (editable in the panel) wins; otherwise fall back to
+  // the Blox calendar id seeded in advisor-agendas.json
+  function agendaUrlFor(name) {
+    const custom = (profiles[name]?.agendaUrl || "").trim();
+    if (custom) return custom;
+    const id = advisorAgendaIds[name];
+    return id ? `${BLOX_AGENDA_BASE}${id}` : "";
+  }
 
   const advisorNames = useMemo(() => {
     // union with addedAdvisors: a brand-new advisor with zero postcodes has
@@ -1191,7 +1224,7 @@ function DeptMap({ config, isAdmin }) {
                           const isPrio = tagDefs.some((td) => td.bold && (advisorTags[n] || []).includes(td.id)) || profiles[n]?.tier === "A";
                           return (
                             <span key={n} style={isPrio ? { fontWeight: 700 } : {}}>
-                              {n}{idx < advisors.length - 1 ? ", " : ""}
+                              {n}<AgendaLink url={agendaUrlFor(n)} small />{idx < advisors.length - 1 ? ", " : ""}
                             </span>
                           );
                         })
@@ -1355,6 +1388,7 @@ function DeptMap({ config, isAdmin }) {
                 ) : (
                   <h2>{panelAdvisor}</h2>
                 )}
+                <AgendaLink url={agendaUrlFor(panelAdvisor)} />
                 <button className="advisor-panel-close" onClick={closeAdvisorPanel} aria-label="Sluiten">×</button>
               </div>
               {panelNameError && <p className="warning">{panelNameError}</p>}
@@ -1479,6 +1513,17 @@ function DeptMap({ config, isAdmin }) {
                   <div className="profile-section">
                     <p className="hint">Extra info</p>
                     <textarea rows={4} value={profileDraft.extraInfo} onChange={(e) => updateProfileField("extraInfo", e.target.value)} />
+                  </div>
+
+                  <div className="profile-section">
+                    <p className="hint">Agenda-link (Blox)</p>
+                    <input
+                      type="url"
+                      className="advisor-panel-home-input"
+                      placeholder={advisorAgendaIds[panelAdvisor] ? `${BLOX_AGENDA_BASE}${advisorAgendaIds[panelAdvisor]}` : `${BLOX_AGENDA_BASE}...`}
+                      value={profileDraft.agendaUrl || ""}
+                      onChange={(e) => updateProfileField("agendaUrl", e.target.value)}
+                    />
                   </div>
 
                   <div className="editor-actions">
