@@ -971,3 +971,18 @@ html, body { height: 100%; margin: 0; }
   padding: 1px;
   vertical-align: -2px;
 }
+
+/* Gsm (Maya, 24/10): geen zijwaarts scrollen meer. Kaart bovenaan, adviseurslijst eronder;
+   de zoekbalk over de volle breedte van de kaart, zoomen met twee vingers. */
+.app-shell { width: 100%; }
+@media (max-width: 760px) {
+  .app-shell { height: auto; min-height: calc(100vh - 46px); }
+  .app { flex-direction: column; }
+  .map-wrap { order: -1; flex: none; height: 58vh; min-height: 320px; }
+  .sidebar { width: 100%; border-right: none; border-top: 1px solid #ddd; overflow-y: visible; }
+  .search-bar { top: 8px; left: 8px; right: 8px; width: auto; padding: 8px; }
+  .search-bar input { font-size: 16px; }
+  .leaflet-control-zoom { display: none; }
+  .dept-tabs { overflow-x: auto; }
+  .dept-tab { padding: 8px 12px; white-space: nowrap; }
+}
