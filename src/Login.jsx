@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { firebaseEnabled, adminSignIn } from "./firebase.js";
 
 const VIEW_CODE = import.meta.env.VITE_ACCESS_CODE || "Bawaba";
@@ -9,7 +9,34 @@ const LOCAL_ADMIN_CODE = import.meta.env.VITE_ADMIN_ACCESS_CODE || "adminbawaba"
 // Console); the login form itself only asks for the password
 const ADMIN_EMAIL = import.meta.env.VITE_FIREBASE_ADMIN_EMAIL || "admin@regioapp.local";
 
+// Eén login (Maya, 24/10): wie in BawabaDash is ingelogd, komt hier zonder code binnen.
+// BawabaDash geeft een eenmalige code mee (#bawaba=...); People controleert ze (2 min, één keer).
+const BAWABADASH_SSO = "https://bawabadash.vercel.app/api/sso/regio";
+const PEOPLE_INWISSELEN = "https://mybawaba.vercel.app/api/v1/sso/inwisselen";
+
+function leesSso() {
+  const m = window.location.hash.match(/bawaba=([a-f0-9]{64})/);
+  const fout = /bawaba-fout/.test(window.location.hash);
+  if (m || fout) window.history.replaceState(null, "", window.location.pathname + window.location.search);
+  return { code: m ? m[1] : null, fout };
+}
+
 export default function Login({ onSuccess }) {
+  const [sso] = useState(leesSso);
+  // Zonder code en zonder fout: meteen via BawabaDash (?code=1 toont het oude formulier).
+  const [ssoBezig, setSsoBezig] = useState(() => !sso.fout && !new URLSearchParams(window.location.search).has("code"));
+
+  const gestart = useRef(false);
+  useEffect(() => {
+    if (!ssoBezig || gestart.current) return;
+    gestart.current = true;
+    if (!sso.code) { window.location.replace(BAWABADASH_SSO); return; }
+    fetch(PEOPLE_INWISSELEN, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: sso.code }) })
+      .then((r) => (r.ok ? r.json() : { ok: false }))
+      .then((d) => { if (d.ok) onSuccess("viewer"); else setSsoBezig(false); })
+      .catch(() => setSsoBezig(false));
+  }, [ssoBezig, sso.code, onSuccess]);
+
   const [mode, setMode] = useState("viewer");
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
@@ -54,6 +81,14 @@ export default function Login({ onSuccess }) {
     }
   }
 
+  if (ssoBezig) {
+    return (
+      <div className="login-screen">
+        <div className="login-box"><p className="hint">Even inloggen via BawabaDash...</p></div>
+      </div>
+    );
+  }
+
   if (mode === "admin") {
     return (
       <div className="login-screen">
@@ -93,6 +128,7 @@ export default function Login({ onSuccess }) {
         />
         {error && <p className="warning">{error}</p>}
         <button type="submit" className="save-btn">Openen</button>
+        <a className="login-switch" href={BAWABADASH_SSO}>Inloggen via BawabaDash →</a>
         <button type="button" className="login-switch" onClick={() => switchMode("admin")}>
           Ben je beheerder? Log hier in →
         </button>
