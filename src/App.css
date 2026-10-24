@@ -986,3 +986,8 @@ html, body { height: 100%; margin: 0; }
   .dept-tabs { overflow-x: auto; }
   .dept-tab { padding: 8px 12px; white-space: nowrap; }
 }
+
+/* Bawaba-balk op de gsm: onderaan een vaste menubalk (--balk-onder, gezet door balk.js). */
+@media (max-width: 760px) {
+  .login-screen { height: calc(100vh - 46px - var(--balk-onder, 0px)); }
+}
