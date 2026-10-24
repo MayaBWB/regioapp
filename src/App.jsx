@@ -261,6 +261,11 @@ export default function App() {
   // devtools, so it's no longer the actual security boundary
   const isAdmin = role === "admin" && (!firebaseEnabled || fbAdminAuthed);
 
+  function kiesRol(r) {
+    sessionStorage.setItem(ROLE_KEY, r);
+    setRole(r);
+  }
+
   function handleLogout() {
     sessionStorage.removeItem(AUTH_KEY);
     sessionStorage.removeItem(ROLE_KEY);
@@ -281,6 +286,12 @@ export default function App() {
             {d.label}
           </button>
         ))}
+        {fbAdminAuthed && (
+          // Beheer kan zelf als agent kijken en terug, zonder uit te loggen (Maya, 24/10).
+          <button className="logout-btn" onClick={() => kiesRol(role === "admin" ? "viewer" : "admin")}>
+            {role === "admin" ? "Bekijk als agent" : "Terug naar beheer"}
+          </button>
+        )}
         <button className="logout-btn" onClick={handleLogout}>Uitloggen</button>
       </div>
       <DeptMap key={dept.id} config={dept} isAdmin={isAdmin} />
