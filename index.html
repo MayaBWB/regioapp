@@ -5,10 +5,14 @@
     <meta name="google" content="notranslate" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>regio-app</title>
+    <title>Regiokaart · Bawaba</title>
+    <style>bawaba-balk{display:block;height:46px;background:#16283e}</style>
   </head>
   <body>
+    <!-- Bawaba-balk (Maya, 24/10): de gedeelde navigatiebalk van alle Bawaba-apps -->
+    <bawaba-balk app="regio" afdelingen="leads"></bawaba-balk>
     <div id="root"></div>
+    <script src="https://bawabadash.vercel.app/balk.js" defer></script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
