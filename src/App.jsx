@@ -1094,9 +1094,6 @@ function DeptMap({ config, isAdmin }) {
     <div className="app">
       <aside className="sidebar">
         <h1>Adviseurs</h1>
-        <p className={firebaseEnabled ? "sync-status live" : "sync-status local"}>
-          {firebaseEnabled ? "● Live gedeeld met iedereen" : "○ Enkel lokaal (niet gedeeld)"}
-        </p>
         <p className="hint role-badge">{isAdmin ? "Beheerder · kan bewerken" : "Bekijker · geen bewerkrechten"}</p>
         {isAdmin && (
           <button className="reset-btn" onClick={() => setNotesPanelOpen(true)} title="Notities op de kaart toevoegen of verwijderen">
