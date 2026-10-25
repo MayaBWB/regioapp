@@ -1,4 +1,7 @@
 {
+  "rewrites": [
+    { "source": "/kantoor", "destination": "/index.html" }
+  ],
   "headers": [
     {
       "source": "/data/(.*)",

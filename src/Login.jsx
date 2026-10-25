@@ -14,6 +14,43 @@ const ADMIN_EMAIL = import.meta.env.VITE_FIREBASE_ADMIN_EMAIL || "admin@regioapp
 const BAWABADASH_SSO = "https://bawabadash.vercel.app/api/sso/regio";
 const PEOPLE_INWISSELEN = "https://mybawaba.vercel.app/api/v1/sso/inwisselen";
 
+// Eigen ingang voor FavorCool-kantoor (Maya, 25/10): /kantoor toont meteen een codescherm,
+// met een eigen code los van Bawaba, enkel kijken. Zonder ingestelde code: geen toegang.
+const KANTOOR_CODE = (import.meta.env.VITE_KANTOOR_CODE || "").trim();
+const isKantoor = () => window.location.pathname.replace(/\/+$/, "") === "/kantoor";
+
+function KantoorLogin({ onSuccess }) {
+  const [code, setCode] = useState("");
+  const [error, setError] = useState("");
+  function submit(e) {
+    e.preventDefault();
+    if (KANTOOR_CODE && code.trim() === KANTOOR_CODE) onSuccess("viewer");
+    else setError("Foute code, probeer opnieuw");
+  }
+  return (
+    <div className="login-screen">
+      <form className="login-box" onSubmit={submit}>
+        <h1>Adviseurs regiokaart</h1>
+        <p className="hint">Voer de toegangscode in</p>
+        <input
+          type="password"
+          autoFocus
+          value={code}
+          onChange={(e) => { setCode(e.target.value); setError(""); }}
+          placeholder="Toegangscode"
+        />
+        {error && <p className="warning">{error}</p>}
+        <button type="submit" className="save-btn">Openen</button>
+      </form>
+    </div>
+  );
+}
+
+export default function Login({ onSuccess }) {
+  if (isKantoor()) return <KantoorLogin onSuccess={onSuccess} />;
+  return <BawabaLogin onSuccess={onSuccess} />;
+}
+
 function leesSso() {
   const m = window.location.hash.match(/bawaba=([a-f0-9]{64})/);
   const fout = /bawaba-fout/.test(window.location.hash);
@@ -21,7 +58,7 @@ function leesSso() {
   return { code: m ? m[1] : null, fout };
 }
 
-export default function Login({ onSuccess }) {
+function BawabaLogin({ onSuccess }) {
   const [sso] = useState(leesSso);
   // Zonder code en zonder fout: meteen via BawabaDash (?code=1 toont het oude formulier).
   const [ssoBezig, setSsoBezig] = useState(() => !sso.fout && !new URLSearchParams(window.location.search).has("code"));
