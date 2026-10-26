@@ -4,7 +4,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "./App.css";
 import Login from "./Login.jsx";
-import { firebaseEnabled, subscribeToOverrides, saveOverridesShared, subscribeToAdminAuth, adminSignOut } from "./firebase.js";
+import { firebaseEnabled, subscribeToOverrides, saveOverridesShared, subscribeToAdminAuth, adminSignOut, adminSignIn } from "./firebase.js";
 import avatarMale from "./assets/avatar-male.png";
 import avatarFemale from "./assets/avatar-female.png";
 
@@ -236,6 +236,7 @@ export default function App() {
   const [authed, setAuthed] = useState(() => sessionStorage.getItem(AUTH_KEY) === "1");
   const [role, setRole] = useState(() => sessionStorage.getItem(ROLE_KEY) || "viewer");
   const [fbAdminAuthed, setFbAdminAuthed] = useState(false);
+  const [beheerOpen, setBeheerOpen] = useState(false);
   const [activeDept, setActiveDept] = useState(DEPARTMENTS[0].id);
 
   useEffect(() => {
@@ -286,6 +287,10 @@ export default function App() {
             {d.label}
           </button>
         ))}
+        {!fbAdminAuthed && firebaseEnabled && window.location.pathname.replace(/\/+$/, "") !== "/kantoor" && (
+          // Na de login via BawabaDash ben je bekijker; beheer vraagt het beheerwachtwoord (Yasmin, 26/10)
+          <button className="logout-btn" onClick={() => setBeheerOpen(true)}>Beheer</button>
+        )}
         {fbAdminAuthed && (
           // Beheer kan zelf als agent kijken en terug, zonder uit te loggen (Maya, 24/10).
           <button className="logout-btn" onClick={() => kiesRol(role === "admin" ? "viewer" : "admin")}>
@@ -294,7 +299,34 @@ export default function App() {
         )}
         <button className="logout-btn" onClick={handleLogout}>Uitloggen</button>
       </div>
+      {beheerOpen && <BeheerLogin onClose={() => setBeheerOpen(false)} onOk={() => { setBeheerOpen(false); kiesRol("admin"); }} />}
       <DeptMap key={dept.id} config={dept} isAdmin={isAdmin} />
+    </div>
+  );
+}
+
+const BEHEER_EMAIL = import.meta.env.VITE_FIREBASE_ADMIN_EMAIL || "admin@regioapp.local";
+function BeheerLogin({ onClose, onOk }) {
+  const [pw, setPw] = useState("");
+  const [fout, setFout] = useState("");
+  const [bezig, setBezig] = useState(false);
+  async function submit(e) {
+    e.preventDefault();
+    setBezig(true); setFout("");
+    try { await adminSignIn(BEHEER_EMAIL, pw); onOk(); }
+    catch { setFout("Fout wachtwoord"); }
+    finally { setBezig(false); }
+  }
+  return (
+    <div className="login-screen" style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(0,0,0,.35)" }} onClick={onClose}>
+      <form className="login-box" onSubmit={submit} onClick={(e) => e.stopPropagation()}>
+        <h1>Beheer</h1>
+        <p className="hint">Beheerwachtwoord om regio's en thuisbasissen aan te passen</p>
+        <input type="password" autoFocus value={pw} onChange={(e) => { setPw(e.target.value); setFout(""); }} placeholder="Wachtwoord" />
+        {fout && <p className="warning">{fout}</p>}
+        <button type="submit" className="save-btn" disabled={bezig}>{bezig ? "Bezig..." : "Openen"}</button>
+        <button type="button" className="logout-btn" onClick={onClose} style={{ marginTop: 8 }}>Annuleren</button>
+      </form>
     </div>
   );
 }
