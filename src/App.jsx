@@ -167,6 +167,13 @@ const DEPARTMENTS = [
   },
 ];
 
+// Zoeken op plaatsnaam zonder te letten op streepjes, spaties, hoofdletters of accenten:
+// "oud beijerland" vindt "Oud-Beijerland", "st truiden" vindt "Sint-Truiden" (Yasmin, 1/11)
+function zoekNorm(s) {
+  return String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/\bst\b\.?/g, "sint").replace(/[^a-z0-9]/g, "");
+}
+
 function colorForIndex(i) {
   return COLORS[i % COLORS.length];
 }
@@ -1065,21 +1072,25 @@ function DeptMap({ config, isAdmin }) {
   }
 
   const namesToPostcodes = useMemo(() => {
-    return Object.entries(postcodeNames).map(([pc, name]) => ({ pc, name, lower: name.toLowerCase() }));
+    return Object.entries(postcodeNames).map(([pc, name]) => ({ pc, name, lower: zoekNorm(name) }));
   }, [postcodeNames]);
 
   function runSearch() {
     const entries = searchFields.map((s) => s.trim()).filter(Boolean);
     const results = [];
     const missing = [];
-    entries.forEach((entry, i) => {
+    entries.forEach((invoer, i) => {
+      let entry = invoer;
+      // NL-postcode met letters (bv. 3262 AB) telt als de 4 cijfers (Yasmin, 1/11)
+      const pcMatch = entry.match(/^(\d{4})\s*[a-z]{0,2}$/i);
+      if (pcMatch) entry = pcMatch[1];
       const isPostcode = /^\d{4}$/.test(entry);
       let matchedPostcodes = [];
       if (isPostcode && availablePostcodes.has(entry)) {
         matchedPostcodes = [entry];
       } else if (!isPostcode) {
-        const needle = entry.toLowerCase();
-        matchedPostcodes = namesToPostcodes.filter((n) => n.lower.includes(needle)).map((n) => n.pc);
+        const needle = zoekNorm(entry);
+        matchedPostcodes = needle ? namesToPostcodes.filter((n) => n.lower.includes(needle)).map((n) => n.pc) : [];
       }
       if (matchedPostcodes.length) {
         matchedPostcodes.forEach((pc) => {
@@ -1087,7 +1098,7 @@ function DeptMap({ config, isAdmin }) {
           results.push({ postcode: pc, name: postcodeNames[pc], color: SEARCH_COLORS[i], advisors });
         });
       } else {
-        missing.push(entry);
+        missing.push(invoer);
       }
     });
     setActiveSearch(results);
