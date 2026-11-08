@@ -49,7 +49,7 @@ const PRODUCT_DEFS = [
   { id: "infraroodpanelen", emoji: "🌡️", label: "Infraroodpanelen" },
 ];
 
-const LANGUAGE_DEFS = ["FR", "NL", "ENG"];
+const LANGUAGE_DEFS = ["FR", "NL", "ENG", "DE"];
 
 const GENDER_AVATARS = { m: avatarMale, v: avatarFemale };
 
